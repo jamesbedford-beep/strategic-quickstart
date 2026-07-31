@@ -608,9 +608,8 @@
       }
       renderFormNotes(rows);
     }).catch(function () {
-      notesMessage('Could not read the notes sheet. It may not be published to the web yet, ' +
-        'or you may be offline. You can still add a note with the button above. ' +
-        'Setup steps are in <code>NOTES-SETUP.md</code>.');
+      notesMessage('Could not load the notes just now. You may be offline. ' +
+        'Adding a note with the button above still works.');
     });
   }
 
@@ -704,14 +703,12 @@
         'Everything on the Build tab still runs entirely offline.';
       all.href = NC.formUrl;
       all.hidden = false;
-      $('notesSetup').hidden = true;
     } else {
       caveat.textContent = 'Reading needs nothing. Posting currently needs a GitHub account, ' +
         'which is what attributes a note to you. The Build tab never touches the network.';
       all.href = REPO_URL + '/issues';
       all.textContent = 'Open the board on GitHub';
       all.hidden = false;
-      $('notesSetup').hidden = false;
     }
   }
 

@@ -8,7 +8,7 @@
 <!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
      new HTML with a cached older script, which throws and leaves the page half
      initialized. Same number on every asset so they can never mismatch. -->
-<link rel="stylesheet" href="assets/styles.css?v=2">
+<link rel="stylesheet" href="assets/styles.css?v=3">
 </head>
 <body>
 
@@ -224,33 +224,6 @@
 
     <p class="note notes-caveat" id="notesCaveat"></p>
 
-    <div id="notesSetup" class="setup" hidden>
-      <h3>Two URLs and this becomes no-login</h3>
-      <p>
-        Right now posting needs a GitHub account. To let anyone add a note without signing
-        in, put a Google Form in front of it. Roughly four minutes, no code:
-      </p>
-      <ol>
-        <li>Create a Google Form. Suggested questions: <b>Title</b> (short answer),
-          <b>What is awkward or missing</b> (paragraph), <b>What you would like instead</b>
-          (paragraph), <b>Which document or step</b> (short answer),
-          <b>How much it matters</b> (multiple choice), <b>Your name, optional</b> (short answer).</li>
-        <li>In <b>Settings</b>, make sure it does <b>not</b> require sign-in and does not
-          collect email addresses. That is what keeps it anonymous.</li>
-        <li><b>Send</b> &rarr; the link icon &rarr; untick <b>Shorten URL</b>, and copy the
-          long <code>/viewform</code> URL.</li>
-        <li>On the <b>Responses</b> tab, link it to a Google Sheet. In that sheet:
-          <b>File &rarr; Share &rarr; Publish to web</b>, pick the response tab, choose
-          <b>Comma-separated values (.csv)</b>, and Publish. Copy that URL.</li>
-        <li>Paste both into <code>assets/notes-config.js</code> and push. The tab switches
-          over on its own.</li>
-      </ol>
-      <p class="setup-note">
-        Anything submitted through the form is readable by anyone who opens this page, so
-        treat it as a public suggestion box rather than somewhere for anything sensitive.
-      </p>
-    </div>
-
     <div id="notesList" class="notes-list"></div>
   </section>
 </main>
@@ -269,14 +242,14 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js?v=2"></script>
-<script src="assets/sheet.js?v=2"></script>
-<script src="assets/plan.js?v=2"></script>
-<script src="assets/templates.js?v=2"></script>
-<script src="assets/people.js?v=2"></script>
-<script src="assets/notes-config.js?v=2"></script>
-<script src="assets/render.js?v=2"></script>
-<script src="assets/build.js?v=2"></script>
-<script src="assets/app.js?v=2"></script>
+<script src="assets/zip.js?v=3"></script>
+<script src="assets/sheet.js?v=3"></script>
+<script src="assets/plan.js?v=3"></script>
+<script src="assets/templates.js?v=3"></script>
+<script src="assets/people.js?v=3"></script>
+<script src="assets/notes-config.js?v=3"></script>
+<script src="assets/render.js?v=3"></script>
+<script src="assets/build.js?v=3"></script>
+<script src="assets/app.js?v=3"></script>
 </body>
 </html>
