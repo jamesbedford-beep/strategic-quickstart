@@ -553,9 +553,16 @@
   }
 
   function onepager(cfg, sched) {
-    var phaseRows = sched.phases.map(function (ph) {
-      return [ph.name, P.iso(ph.start) + ' to ' + P.iso(ph.end), '[not started / in progress / done]'];
-    });
+    /* Only report phases the user actually saw. If the phase editor was not part
+       of their form, emit a placeholder rather than template phases they never
+       reviewed. */
+    var phaseRows = (cfg.phasesInForm && sched.phases.length)
+      ? sched.phases.map(function (ph) {
+        return [ph.name, P.iso(ph.start) + ' to ' + P.iso(ph.end), '[not started / in progress / done]'];
+      })
+      : [['[workstream]', '[dates]', '[not started / in progress / done]'],
+        ['[workstream]', '', ''],
+        ['[workstream]', '', '']];
     return [
       { h1: cfg.project },
       { meta: [

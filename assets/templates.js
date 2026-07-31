@@ -419,8 +419,11 @@
     { id: 'kickoff', kind: 'doc', order: 9, file: 'kickoff-agenda',
       uses: ['team'],
       name: 'Kickoff agenda', blurb: 'Timed 90 minute agenda with pre-reads and the decisions the meeting must actually produce.' },
+    /* deliberately does not list 'phases': a one-pager should not drag the whole
+       phase editor into view. It uses them when they are there and falls back to
+       a placeholder table when they are not. */
     { id: 'onepager', kind: 'doc', order: 10, file: 'update-onepager',
-      uses: ['schedule', 'phases', 'sponsor', 'template'],
+      uses: ['schedule', 'sponsor'],
       name: 'Exec one-pager', blurb: 'Standing brief for a sponsor or funder: what this is, where it stands, what we need.' }
   ];
 

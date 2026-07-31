@@ -8,6 +8,12 @@
 
   var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+  /* Backing store for the Team notes tab. GitHub issues are used because they are
+     shared by construction: one list everyone sees, a thread per note, no server
+     to run and no key to leak. Reading is unauthenticated. */
+  var REPO = 'jamesbedford-beep/strategic-quickstart';
+  var REPO_URL = 'https://github.com/' + REPO;
+
   /* ---------------- state ---------------- */
   function presetPhases(id) {
     var p = T.PRESETS[id] || T.PRESETS['strategic-initiative'];
@@ -59,6 +65,11 @@
       var key = nodes[i].getAttribute('data-needs');
       nodes[i].hidden = !n[key];
     }
+    /* the Days box has two gates: the schedule must be needed AND the horizon
+       must be Custom. Apply it after the loop above, which only knows about the
+       first one and would otherwise reveal it. */
+    $('daysField').hidden = !n.schedule || state.horizon !== 'custom';
+
     var kinds = {};
     T.DOCS.forEach(function (d) { if (state.docs.indexOf(d.id) >= 0) kinds[d.kind] = true; });
     $('sheetFmtField').hidden = !kinds.sheet;
@@ -122,6 +133,9 @@
       startDate: state.start,
       horizonDays: horizonDays(),
       granularity: state.gran,
+      /* did the user get to see and edit the phases? documents that use phases
+         only opportunistically check this before reporting them */
+      phasesInForm: !!needs().phases,
       team: (state.team || []).filter(function (m) { return (m.name || m.initials || '').trim(); }),
       phases: (state.phases || []).map(function (p) {
         return { name: p.name, weight: p.weight, owner: p.owner, tasks: parseTasks(p.tasks) };
@@ -216,7 +230,6 @@
     $('f-docfmt').value = state.docfmt;
     $('f-bundle').value = state.bundle;
     $('f-naming').value = state.naming;
-    $('daysField').hidden = state.horizon !== 'custom';
     var p = T.PRESETS[state.preset];
     $('presetHint').textContent = p ? p.hint : '';
   }
@@ -276,31 +289,76 @@
     host.innerHTML = dl + state.phases.map(function (p, i) {
       return '<div class="phase" data-i="' + i + '">' +
         '<div class="phase-top">' +
-          '<input class="pname" type="text" data-k="name" placeholder="Phase name" value="' + R.esc(p.name || '') + '" autocomplete="off">' +
-          '<input type="number" data-k="weight" min="1" max="100" step="1" title="Weight: share of the horizon" value="' + (p.weight || 20) + '">' +
-          '<input type="text" data-k="owner" list="ownerList" placeholder="Owner" value="' + R.esc(p.owner || '') + '" autocomplete="off">' +
-          '<button type="button" class="btn-x" data-act="rm" title="Remove phase">&times;</button>' +
+          '<label class="ff"><span>Phase name</span>' +
+            '<input class="pname" type="text" data-k="name" placeholder="e.g. Scoping" value="' + R.esc(p.name || '') + '" autocomplete="off"></label>' +
+          '<label class="ff"><span>Weight</span>' +
+            '<input type="number" data-k="weight" min="1" max="100" step="1" value="' + (p.weight || 20) + '"></label>' +
+          '<label class="ff"><span>Owner</span>' +
+            '<input type="text" data-k="owner" list="ownerList" placeholder="Inherits" value="' + R.esc(p.owner || '') + '" autocomplete="off"></label>' +
+          '<button type="button" class="btn-x" data-act="rm" title="Remove this phase">&times;</button>' +
         '</div>' +
-        '<textarea data-k="tasks" spellcheck="false" placeholder="One task per line. Prefix with * for a milestone.">' +
-          R.esc(p.tasks || '') + '</textarea>' +
+        '<label class="ff ff-tasks"><span>Tasks, one per line. Start a line with <b>*</b> to make it a milestone.</span>' +
+          '<textarea data-k="tasks" spellcheck="false" rows="3" placeholder="Draft the problem statement&#10;Interview stakeholders&#10;* Scope signed off">' +
+          R.esc(p.tasks || '') + '</textarea></label>' +
         '<div class="phase-foot"><span class="pf-dates"></span><span class="pf-count"></span></div>' +
+        '<div class="phase-actions">' +
+          '<button type="button" class="btn-mini" data-act="task">+ Task</button>' +
+          '<button type="button" class="btn-mini" data-act="ms">+ Milestone</button>' +
+        '</div>' +
       '</div>';
     }).join('');
+    autosizeAll();
     updatePhaseFeet();
   }
 
+  /* grow every task box to fit its content: a scrollbar hides tasks, and
+     hidden tasks are the main reason this section confused people */
+  function autosize(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(64, el.scrollHeight + 2) + 'px';
+  }
+  function autosizeAll() {
+    var t = $('phaseList').querySelectorAll('textarea');
+    for (var i = 0; i < t.length; i++) autosize(t[i]);
+  }
+
   function updatePhaseFeet() {
-    var sched = P.buildSchedule(cfg());
+    var c = cfg();
+    var sched = P.buildSchedule(c);
+    var totalDays = horizonDays();
+    var totalW = c.phases.reduce(function (n, p) {
+      return n + (Number(p.weight) > 0 ? Number(p.weight) : 1);
+    }, 0) || 1;
+    var scheduled = needs().schedule;
+
     var nodes = $('phaseList').querySelectorAll('.phase');
     for (var i = 0; i < nodes.length; i++) {
       var ph = sched.phases[i];
-      var d = nodes[i].querySelector('.pf-dates');
-      var c = nodes[i].querySelector('.pf-count');
-      if (!ph) { if (d) d.textContent = ''; if (c) c.textContent = ''; continue; }
+      var dEl = nodes[i].querySelector('.pf-dates');
+      var cEl = nodes[i].querySelector('.pf-count');
+      if (!ph) { dEl.textContent = ''; cEl.textContent = ''; continue; }
+
+      var w = Number(state.phases[i] && state.phases[i].weight) || 1;
+      var pct = Math.round(w / totalW * 100);
       var days = P.diffDays(ph.start, ph.end) + 1;
-      d.textContent = P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end) + '  (' + days + ' days)';
+
+      /* say what the weight bought, in the units the user cares about */
+      dEl.textContent = scheduled
+        ? 'Weight ' + w + ' of ' + totalW + ' = ' + pct + '% of the horizon, so ' +
+          days + ' days: ' + P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end)
+        : 'Weight ' + w + ' of ' + totalW + ' = ' + pct + '% of the horizon';
+
       var ms = ph.tasks.filter(function (t) { return t.milestone; }).length;
-      c.textContent = (ph.tasks.length - ms) + ' tasks, ' + ms + ' milestone' + (ms === 1 ? '' : 's');
+      var tasks = ph.tasks.length - ms;
+      if (!ph.tasks.length) {
+        cEl.textContent = 'No tasks yet';
+        cEl.className = 'pf-count pf-empty';
+      } else {
+        cEl.textContent = tasks + (tasks === 1 ? ' task' : ' tasks') +
+          (ms ? ', ' + ms + (ms === 1 ? ' milestone' : ' milestones') : '');
+        cEl.className = 'pf-count';
+      }
     }
   }
 
@@ -356,6 +414,14 @@
     var taskCount = c.phases.reduce(function (n, p) {
       return n + p.tasks.filter(function (t) { return !t.milestone; }).length;
     }, 0);
+    var totalW = c.phases.reduce(function (n, p) {
+      return n + (Number(p.weight) > 0 ? Number(p.weight) : 1);
+    }, 0);
+    $('weightTotal').textContent = c.phases.length
+      ? 'Weights total ' + totalW + ' across ' + c.phases.length + ' phases. ' +
+        'They do not have to add up to 100: what matters is each phase relative to the rest.'
+      : '';
+
     var warn = $('planWarn');
     if (!c.phases.length) {
       warn.hidden = false;
@@ -440,6 +506,86 @@
     toast(all.length + ' files exported');
   }
 
+  /* ---------------- team notes ---------------- */
+  var notesLoaded = false;
+
+  function relTime(iso) {
+    var then = new Date(iso), now = new Date();
+    var mins = Math.round((now - then) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+    var h = Math.round(mins / 60);
+    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    var d = Math.round(h / 24);
+    if (d < 31) return d + (d === 1 ? ' day ago' : ' days ago');
+    return then.toISOString().slice(0, 10);
+  }
+
+  function notesMessage(html) { $('notesList').innerHTML = '<div class="notes-msg">' + html + '</div>'; }
+
+  function loadNotes(force) {
+    if (notesLoaded && !force) return;
+    notesLoaded = true;
+    notesMessage('Loading notes from GitHub…');
+
+    fetch('https://api.github.com/repos/' + REPO + '/issues?state=all&sort=updated&per_page=50', {
+      headers: { Accept: 'application/vnd.github+json' }
+    }).then(function (res) {
+      if (res.status === 403) throw new Error('rate');
+      if (!res.ok) throw new Error('http ' + res.status);
+      return res.json();
+    }).then(function (items) {
+      /* the issues endpoint also returns pull requests; drop them */
+      var notes = items.filter(function (i) { return !i.pull_request; });
+      if (!notes.length) {
+        notesMessage('No notes yet. <b>Add a note</b> above to start the list: ' +
+          'an idea, a rough edge, or something that should work differently.');
+        return;
+      }
+      $('notesList').innerHTML = notes.map(function (n) {
+        var labels = (n.labels || []).map(function (l) {
+          return '<span class="nt-label">' + R.esc(l.name) + '</span>';
+        }).join('');
+        var up = n.reactions && n.reactions['+1'];
+        return '<a class="nt" href="' + R.esc(n.html_url) + '" target="_blank" rel="noopener">' +
+          '<div class="nt-top">' +
+            '<span class="nt-state nt-' + (n.state === 'open' ? 'open' : 'closed') + '">' +
+              (n.state === 'open' ? 'Open' : 'Done') + '</span>' +
+            '<span class="nt-title">' + R.esc(n.title) + '</span>' +
+          '</div>' +
+          '<div class="nt-meta">' +
+            '#' + n.number + ' &middot; ' + R.esc((n.user && n.user.login) || 'someone') +
+            ' &middot; ' + relTime(n.updated_at) +
+            (n.comments ? ' &middot; ' + n.comments + (n.comments === 1 ? ' comment' : ' comments') : '') +
+            (up ? ' &middot; ' + up + ' &#128077;' : '') +
+            labels +
+          '</div>' +
+        '</a>';
+      }).join('');
+    }).catch(function (err) {
+      var msg = err && err.message === 'rate'
+        ? 'GitHub is rate limiting anonymous requests from this network. Wait a few minutes, ' +
+          'or open the board directly.'
+        : 'Could not reach GitHub. You may be offline, in which case the Build tab still ' +
+          'works normally.';
+      notesMessage(msg + ' <a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">' +
+        'Open the board on GitHub</a>.');
+    });
+  }
+
+  function showTab(name) {
+    var build = name !== 'notes';
+    $('buildPane').hidden = !build;
+    $('hero').hidden = !build;
+    $('notesPane').hidden = build;
+    $('topbarActions').hidden = !build;
+    var tabs = $('tabs').querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('on', tabs[i].getAttribute('data-tab') === name);
+    }
+    if (!build) loadNotes(false);
+  }
+
   var toastTimer;
   function toast(msg) {
     var t = document.querySelector('.toast');
@@ -468,7 +614,6 @@
     var ev = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
     el.addEventListener(ev, function () {
       state[key] = transform ? transform(el.value) : el.value;
-      if (key === 'horizon') { $('daysField').hidden = state.horizon !== 'custom'; }
       if (key === 'sheetfmt' || key === 'docfmt') renderDocs();
       if (key === 'dri') renderPhases();
       refresh();
@@ -558,13 +703,30 @@
       if (!k) return;
       var i = +e.target.closest('.phase').getAttribute('data-i');
       state.phases[i][k] = k === 'weight' ? (parseInt(e.target.value, 10) || 1) : e.target.value;
+      if (k === 'tasks') autosize(e.target);
       refresh();
     });
     $('phaseList').addEventListener('click', function (e) {
-      if (e.target.getAttribute('data-act') !== 'rm') return;
-      var i = +e.target.closest('.phase').getAttribute('data-i');
-      state.phases.splice(i, 1);
-      renderPhases(); refresh();
+      var act = e.target.getAttribute('data-act');
+      if (!act) return;
+      var card = e.target.closest('.phase');
+      var i = +card.getAttribute('data-i');
+
+      if (act === 'rm') {
+        state.phases.splice(i, 1);
+        renderPhases(); refresh();
+        return;
+      }
+      /* append a line and put the cursor on it, so the * convention is learned
+         by seeing it rather than by reading about it */
+      var ta = card.querySelector('textarea');
+      var line = act === 'ms' ? '* Milestone' : 'New task';
+      ta.value = (ta.value.replace(/\s+$/, '') ? ta.value.replace(/\s+$/, '') + '\n' : '') + line;
+      state.phases[i].tasks = ta.value;
+      autosize(ta);
+      ta.focus();
+      ta.setSelectionRange(ta.value.length - line.length, ta.value.length);
+      refresh();
     });
 
     /* document picker */
@@ -612,6 +774,21 @@
       var text = item.sheet ? S.toCsv(item.sheet) : R.toMarkdown(item.blocks);
       copyText(text, item.doc.name + ' copied' + (item.sheet ? ' as CSV' : ' as Markdown'));
     });
+
+    /* tabs and the shared notes board */
+    $('tabs').addEventListener('click', function (e) {
+      var t = e.target.closest('.tab');
+      if (t) showTab(t.getAttribute('data-tab'));
+    });
+    $('notesRefresh').addEventListener('click', function () { loadNotes(true); });
+
+    $('newNoteBtn').href = REPO_URL + '/issues/new?labels=idea&title=' +
+      encodeURIComponent('') + '&body=' + encodeURIComponent(
+        '**What is awkward or missing today**\n\n\n' +
+        '**What you would like instead**\n\n\n' +
+        '**Which document or step it affects**\n\n\n' +
+        '**How much it matters (nice to have / would save real time / blocking)**\n\n');
+    $('allNotesBtn').href = REPO_URL + '/issues';
 
     $('linkBtn').addEventListener('click', function () {
       var url = location.origin + location.pathname + '#s=' + encodeState(state);

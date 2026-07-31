@@ -9,9 +9,22 @@
 </head>
 <body>
 
-<header class="hero">
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <div class="brand topbar-brand">Strategic Quickstart</div>
+    <nav class="tabs" id="tabs" aria-label="Sections">
+      <button type="button" class="tab on" data-tab="build">Build documents</button>
+      <button type="button" class="tab" data-tab="notes">Team notes</button>
+    </nav>
+    <div class="topbar-actions" id="topbarActions">
+      <span class="export-note" id="exportNote"></span>
+      <button type="button" class="btn-primary btn-export" id="exportBtn">Export</button>
+    </div>
+  </div>
+</header>
+
+<header class="hero" id="hero">
   <div class="wrap">
-    <div class="brand">Strategic Quickstart</div>
     <h1>Project docs, pre-made.</h1>
     <p class="lede">
       Set up the project, tick the documents you need, adjust the phases.
@@ -24,12 +37,56 @@
   </div>
 </header>
 
-<main class="wrap layout">
+<main class="wrap layout" id="buildPane">
   <div class="col-left">
+
+    <section class="card card-primary">
+      <div class="card-head">
+        <h2>1. What do you need?</h2>
+        <span class="card-head-tools">
+          <button type="button" class="btn-link" id="selAll">All</button>
+          <button type="button" class="btn-link" id="selNone">None</button>
+        </span>
+      </div>
+      <p class="hint">Tick the documents you want. The questions below narrow to only what your selection actually needs.</p>
+      <div id="docGrid" class="doc-grid"></div>
+
+      <div class="sub-head"><h3>Output</h3></div>
+      <div class="grid2">
+        <label class="field" id="sheetFmtField">
+          <span>Spreadsheets</span>
+          <select id="f-sheetfmt">
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
+        </label>
+        <label class="field" id="docFmtField">
+          <span>Documents</span>
+          <select id="f-docfmt">
+            <option value="md">Markdown (.md)</option>
+            <option value="html">Word-compatible (.html)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Download as</span>
+          <select id="f-bundle">
+            <option value="zip">One zip file</option>
+            <option value="files">Separate files</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Filenames</span>
+          <select id="f-naming">
+            <option value="numbered">Numbered (01-project-plan)</option>
+            <option value="dated">Date prefixed (20260731 Project plan)</option>
+          </select>
+        </label>
+      </div>
+    </section>
 
     <section class="card">
       <div class="card-head">
-        <h2>1. Set up the project</h2>
+        <h2>2. Set up the project</h2>
       </div>
       <div class="grid2">
         <label class="field span2">
@@ -91,61 +148,31 @@
       </div>
     </section>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>2. Pick your documents</h2>
-        <span class="card-head-tools">
-          <button type="button" class="btn-link" id="selAll">All</button>
-          <button type="button" class="btn-link" id="selNone">None</button>
-        </span>
-      </div>
-      <p class="hint">Step 1 only asks for what your selection actually needs, so ticking fewer documents means fewer questions.</p>
-      <div id="docGrid" class="doc-grid"></div>
-
-      <div class="sub-head"><h3>Output</h3></div>
-      <div class="grid2">
-        <label class="field" id="sheetFmtField">
-          <span>Spreadsheets</span>
-          <select id="f-sheetfmt">
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-          </select>
-        </label>
-        <label class="field" id="docFmtField">
-          <span>Documents</span>
-          <select id="f-docfmt">
-            <option value="md">Markdown (.md)</option>
-            <option value="html">Word-compatible (.html)</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Download as</span>
-          <select id="f-bundle">
-            <option value="zip">One zip file</option>
-            <option value="files">Separate files</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Filenames</span>
-          <select id="f-naming">
-            <option value="numbered">Numbered (01-project-plan)</option>
-            <option value="dated">Date prefixed (20260731 Project plan)</option>
-          </select>
-        </label>
-      </div>
-    </section>
-
     <section class="card" id="phasesCard" data-needs="phases">
       <div class="card-head">
         <h2>3. Phases and tasks</h2>
         <button type="button" class="btn-link" id="resetPhases">Reset to template</button>
       </div>
-      <p class="hint">
-        One task per line. Prefix a line with <code>*</code> to make it a milestone: zero duration,
-        pinned to the end of its phase. Weight sets how much of the horizon a phase takes.
-      </p>
+
+      <div class="explain">
+        <p>
+          A <b>phase</b> is a slice of your timeline. Its <b>weight</b> decides how big that slice is:
+          a phase weighted 20 out of a total of 100 gets a fifth of the horizon. Tasks inside a phase
+          are then laid end to end across its slice, so each one gets a start and a due date.
+        </p>
+        <ul>
+          <li><b>One task per line.</b> Press Enter for the next one.</li>
+          <li>Start a line with <code>*</code> for a <b>milestone</b>: no duration, pinned to the end of
+            its phase, and marked <span class="ms-chip">&#9670;</span> in the plan and Gantt.</li>
+          <li>Leave <b>Owner</b> blank and the phase inherits the project owner.</li>
+          <li>The grey line under each phase shows the dates your weight produced. Nothing is locked in:
+            edit any of it, or fix the dates in the spreadsheet afterwards.</li>
+        </ul>
+      </div>
+
       <div id="phaseList"></div>
       <button type="button" class="btn-ghost" id="addPhase">+ Add phase</button>
+      <p class="hint" id="weightTotal"></p>
       <p class="warn" id="planWarn" hidden></p>
     </section>
 
@@ -161,16 +188,41 @@
         </span>
       </div>
 
-      <div class="export-bar">
-        <button type="button" class="btn-primary" id="exportBtn">Export</button>
-        <span class="export-note" id="exportNote"></span>
-      </div>
-
       <div class="pv-tabs" id="previewTabs"></div>
       <p class="pv-file" id="previewMeta"></p>
       <div class="pv-body" id="previewBody"></div>
     </div>
   </aside>
+</main>
+
+<main class="wrap notes-pane" id="notesPane" hidden>
+  <section class="card">
+    <div class="card-head">
+      <h2>Team notes</h2>
+      <span class="card-head-tools">
+        <button type="button" class="btn-link" id="notesRefresh">Refresh</button>
+      </span>
+    </div>
+    <p class="hint">
+      A shared board for improvements and ideas, so the team can see and discuss them
+      before anything gets built. It is backed by the GitHub issues on this repo, which is
+      what makes it shared: everyone sees the same list, and each note keeps its own
+      comment thread.
+    </p>
+
+    <div class="notes-actions">
+      <a class="btn-primary" id="newNoteBtn" target="_blank" rel="noopener">Add a note</a>
+      <a class="btn-ghost btn-ghost-inline" id="allNotesBtn" target="_blank" rel="noopener">Open the full board</a>
+    </div>
+
+    <p class="note notes-caveat">
+      This tab is the one part of the site that talks to the network, and only when you
+      open it. Reading needs nothing; posting a note needs a GitHub account, since that is
+      what attributes it to you. Everything on the Build tab still runs entirely offline.
+    </p>
+
+    <div id="notesList" class="notes-list"></div>
+  </section>
 </main>
 
 <footer class="wrap foot">
@@ -182,6 +234,10 @@
   <p class="foot-meta">
     No dependencies, no network calls.
     <a href="https://github.com/jamesbedford-beep/strategic-quickstart">Source on GitHub</a>.
+  </p>
+  <p class="foot-joke">
+    There is no server. Actually that is a lie: James is in the background making every one
+    of these by hand, really really fast. Have mercy.
   </p>
 </footer>
 
