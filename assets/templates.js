@@ -32,7 +32,7 @@
           '* Go / no go decision recorded'
         ]),
         P('Set-up', 20, [
-          'Confirm the owner (DRI) and core team',
+          'Confirm the single owner and the core team',
           'Secure budget approval',
           'Stand up workplan, RACI, and risk register',
           'Confirm partner, vendor, or supplier arrangements',
@@ -258,6 +258,94 @@
       ]
     },
 
+    /* Mirrors Evidence Action's Accelerator new-program development stage-gate.
+       Stage names, the internal 3a/3b split, the documented timelines, and the
+       four gating decisions (advance, deprioritize, hold, defer) come from the
+       Accelerator guidance document. Outputs per stage are the ones that
+       guidance names: evidence review, BOTEC and expanded CEA, scorecard,
+       prolog, decision memo. */
+    'evac-accelerator': {
+      label: 'Accelerator stage-gate (EvAc)',
+      hint: 'Sourcing through test at scale, with a gating call at the end of each stage.',
+      statusValues: ['Not Started', 'In Progress', 'On hold', 'Completed', 'Deprioritized'],
+      phases: [
+        P('Stage 0: Sourcing', 4, [
+          'Add the intervention to the pipeline tracker',
+          'Capture the source and why it surfaced now',
+          'Set up the Box folder set for the intervention'
+        ]),
+        P('Stage 1: Screening', 3, [
+          'Screen against the primary criteria: evidence, cost-effectiveness, scale of impact',
+          'Write the stage 1 evidence review',
+          'Start the project scorecard',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 2: Rapid Review', 10, [
+          'Stage 2 evidence review',
+          'BOTEC cost-effectiveness analysis, as point, conservative, and generous',
+          'Assess against the feasibility criteria',
+          'New copy of the scorecard, archive the prior version',
+          'Post the gating decision to the Accelerator channel',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 3a: Deep Dive', 20, [
+          'Stage 3a evidence review',
+          'Build the literature tracker',
+          'Expanded cost-effectiveness analysis',
+          'Map the actor and government landscape',
+          'Global Ops vetting on any new country',
+          'Draft the intervention strawman',
+          'Update the scorecard and the prolog',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 3b: Deep Dive', 15, [
+          'Standalone evidence review',
+          'Basic theory of change',
+          'Stage 3b decision memo',
+          'Cost-effectiveness review with the CE team before anything goes external',
+          'Update the scorecard and the prolog',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 4a: Scoping', 14, [
+          'Program design and theory of change',
+          'Research agenda',
+          'Draft M and E framework with MLE',
+          'Stage 4a decision memo',
+          'Run the 90 minute gating call',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 4b: Design Testing', 14, [
+          'Design the test and its stop conditions',
+          'Secure any IRB approval needed for research or surveys',
+          'Run the design test',
+          'Stage 4b decision memo',
+          '* Gating call: advance, deprioritize, hold, or defer'
+        ]),
+        P('Stage 5: Launch', 10, [
+          'Map decision rights for the funding decision across leadership',
+          'Budget narrative and funding proposal',
+          'Confirm the implementing team and country arrangements',
+          'Launch',
+          '* Launched'
+        ]),
+        P('Stage 6: Test at Scale', 10, [
+          'Monitoring against the M and E framework',
+          'Cost per outcome at scale versus the stage 3 estimate',
+          'Decide continue, expand, pause, or redesign',
+          '* Scale decision recorded'
+        ])
+      ],
+      risks: [
+        ['Evidence base is thinner than the screening stage assumed', 'Delivery'],
+        ['Cost-effectiveness falls outside the threshold once fully costed', 'Funding'],
+        ['Government or actor landscape blocks the delivery route', 'Regulatory / approval'],
+        ['No implementing partner with the capacity to deliver at scale', 'Partner / external'],
+        ['Program lead bandwidth is already committed elsewhere', 'People'],
+        ['Gating call slips and the stage runs past its intended timeline', 'Delivery'],
+        ['Design test cannot be run in time to inform the funding decision', 'Delivery']
+      ]
+    },
+
     'blank': {
       label: 'Blank skeleton',
       hint: 'Three empty phases. Bring your own content.',
@@ -289,33 +377,50 @@
     'Escalation of a blocked item'
   ];
 
-  var STATUS_VALUES = ['Not started', 'In progress', 'Blocked', 'Complete', 'Dropped'];
+  /* Matches the vocabulary Evidence Action trackers actually use (Not Started /
+     In Progress / Completed / On hold) rather than a RAG scale. */
+  var STATUS_VALUES = ['Not Started', 'In Progress', 'On hold', 'Blocked', 'Completed', 'Dropped'];
+  var GATING_DECISIONS = ['Advance', 'Deprioritize', 'Hold', 'Defer'];
   var RISK_CATEGORIES = ['Delivery', 'Partner / external', 'Funding', 'People',
     'Technical', 'Regulatory / approval', 'Reputational', 'Data / privacy'];
   var RISK_STATUS = ['Open', 'Mitigating', 'Monitoring', 'Accepted', 'Closed'];
   var HIGH_MED_LOW = ['High', 'Medium', 'Low'];
 
-  /* Documents on offer. `kind` drives which writer and format select applies. */
+  /* Documents on offer.
+     kind  drives which writer and which format select applies
+     uses  which inputs this document actually needs, so the form can hide the
+           rest: 'schedule' (start date and horizon), 'gantt' (column
+           granularity), 'phases', 'team', 'sponsor', 'template' */
   var DOCS = [
     { id: 'plan', kind: 'sheet', order: 1, file: 'project-plan',
+      uses: ['schedule', 'phases', 'team', 'template'],
       name: 'Project plan', blurb: 'Phase by phase workplan with owner, start, due, status, and notes. Filtered and frozen, status dropdowns wired.' },
     { id: 'gantt', kind: 'sheet', order: 2, file: 'gantt-chart',
+      uses: ['schedule', 'gantt', 'phases', 'team', 'template'],
       name: 'Gantt chart', blurb: 'Timeline grid with colored bars, scaled to your horizon. Daily, weekly, or monthly columns.' },
     { id: 'raci', kind: 'sheet', order: 3, file: 'raci-matrix',
+      uses: ['phases', 'team', 'template'],
       name: 'RACI matrix', blurb: 'Workstreams and standing decisions against your team, with a check that each row has exactly one A.' },
     { id: 'charter', kind: 'doc', order: 4, file: 'project-charter',
-      name: 'Project charter', blurb: 'One page: the decision, scope and non-scope, success metrics, team, milestones, risks, open questions.' },
+      uses: ['schedule', 'phases', 'team', 'sponsor', 'template'],
+      name: 'Project charter', blurb: 'One page: the objective, scope and non-scope, success metrics, team, milestones, risks, open questions.' },
     { id: 'risks', kind: 'sheet', order: 5, file: 'risk-register',
+      uses: ['team', 'template'],
       name: 'Risk register', blurb: 'Pre-seeded with risks typical for this template. Likelihood by impact scoring with a heat scale.' },
     { id: 'stakeholders', kind: 'sheet', order: 6, file: 'stakeholder-map',
+      uses: ['team', 'sponsor'],
       name: 'Stakeholder map', blurb: 'Influence by interest, with the engagement approach derived by formula and an owner per stakeholder.' },
     { id: 'decisions', kind: 'sheet', order: 7, file: 'decision-log',
-      name: 'Decision log', blurb: 'Numbered rows for what was decided, by whom, on what basis, and whether it can be reversed.' },
+      uses: ['team'],
+      name: 'Decision log', blurb: 'What was decided, by whom, which options were rejected, and whether it can be reversed. Evidence Action calls this a prolog.' },
     { id: 'status', kind: 'doc', order: 8, file: 'status-report-template',
-      name: 'Status report', blurb: 'Reusable weekly or fortnightly update: RAG, progress, blockers with a named ask, next period.' },
+      uses: ['schedule', 'phases', 'template'],
+      name: 'Status report', blurb: 'Reusable weekly or fortnightly update: status, progress, blockers that each carry a named ask, next period.' },
     { id: 'kickoff', kind: 'doc', order: 9, file: 'kickoff-agenda',
+      uses: ['team'],
       name: 'Kickoff agenda', blurb: 'Timed 90 minute agenda with pre-reads and the decisions the meeting must actually produce.' },
     { id: 'onepager', kind: 'doc', order: 10, file: 'update-onepager',
+      uses: ['schedule', 'phases', 'sponsor', 'template'],
       name: 'Exec one-pager', blurb: 'Standing brief for a sponsor or funder: what this is, where it stands, what we need.' }
   ];
 
@@ -331,7 +436,14 @@
 
   SIK.templates = {
     PRESETS: PRESETS, GENERIC_RISKS: GENERIC_RISKS, STANDING_DECISIONS: STANDING_DECISIONS,
-    STATUS_VALUES: STATUS_VALUES, RISK_CATEGORIES: RISK_CATEGORIES, RISK_STATUS: RISK_STATUS,
-    HIGH_MED_LOW: HIGH_MED_LOW, DOCS: DOCS, HORIZONS: HORIZONS
+    STATUS_VALUES: STATUS_VALUES, GATING_DECISIONS: GATING_DECISIONS,
+    RISK_CATEGORIES: RISK_CATEGORIES, RISK_STATUS: RISK_STATUS,
+    HIGH_MED_LOW: HIGH_MED_LOW, DOCS: DOCS, HORIZONS: HORIZONS,
+
+    /* a preset may override the plan's status vocabulary */
+    statusFor: function (presetId) {
+      var p = PRESETS[presetId];
+      return (p && p.statusValues) || STATUS_VALUES;
+    }
   };
 })(window.SIK = window.SIK || {});

@@ -14,7 +14,7 @@
 
   function metaLine(cfg, sched) {
     var bits = [];
-    if (cfg.dri) bits.push('Owner (DRI): ' + cfg.dri);
+    if (cfg.dri) bits.push('Owner: ' + cfg.dri);
     if (cfg.sponsor) bits.push('Sponsor: ' + cfg.sponsor);
     bits.push('Window: ' + P.fmtLong(sched.start) + ' to ' + P.fmtLong(sched.end));
     bits.push('Generated: ' + P.iso(P.today()));
@@ -59,7 +59,7 @@
           C(t.start, 'date'),
           C(t.end, 'date'),
           t.milestone ? C('–', 'cellC') : F('IF(COUNT(C' + r + ':D' + r + ')=2,D' + r + '-C' + r + '+1,"")', 'num'),
-          C('Not started', 'cellC'),
+          C(T.statusFor(cfg.preset)[0], 'cellC'),
           blank('cell')
         ]));
       });
@@ -75,7 +75,7 @@
       autoFilter: 'A4:G' + last,
       merges: ['A1:G1', 'A2:G2'],
       validations: [
-        { ref: 'F5:F' + (last + 20), values: T.STATUS_VALUES },
+        { ref: 'F5:F' + (last + 20), values: T.statusFor(cfg.preset) },
         owners.length ? { ref: 'B5:B' + (last + 20), values: owners } : null
       ].filter(Boolean),
       rows: rows
@@ -296,7 +296,7 @@
     var startRow = rows.length + 1;
     var seed = [];
     if (cfg.sponsor) seed.push([cfg.sponsor, '', 'Sponsor', '', 'High', 'High']);
-    if (cfg.dri) seed.push([cfg.dri, '', 'Owner (DRI)', '', 'High', 'High']);
+    if (cfg.dri) seed.push([cfg.dri, '', 'Owner', '', 'High', 'High']);
     (cfg.team || []).forEach(function (m) {
       var n = (m.name || '').trim();
       if (!n || n === cfg.dri || n === cfg.sponsor) return;
@@ -393,7 +393,7 @@
 
   function teamRows(cfg) {
     var out = [];
-    if (cfg.dri) out.push([cfg.dri, 'Owner (DRI)', 'Accountable for delivery and for the plan being true']);
+    if (cfg.dri) out.push([cfg.dri, 'Owner', 'Accountable for delivery and for the plan being true']);
     if (cfg.sponsor) out.push([cfg.sponsor, 'Sponsor', 'Approves scope, budget, and the go / no go']);
     (cfg.team || []).forEach(function (m) {
       var n = (m.name || '').trim();
@@ -414,7 +414,7 @@
     return [
       { h1: cfg.project + ': project charter' },
       { meta: [
-        ['Owner (DRI)', cfg.dri || '[name]'],
+        ['Owner', cfg.dri || '[name]'],
         ['Sponsor', cfg.sponsor || '[name]'],
         ['Window', P.fmtLong(sched.start) + ' to ' + P.fmtLong(sched.end)],
         ['Status', 'Draft'],
@@ -478,7 +478,7 @@
       { h1: cfg.project + ': status update' },
       { meta: [
         ['Period', '[week ending ' + P.iso(P.today()) + ']'],
-        ['Owner (DRI)', cfg.dri || '[name]'],
+        ['Owner', cfg.dri || '[name]'],
         ['Overall status', '[Green / Amber / Red]']
       ] },
       { quote: 'Green: will hit the milestones with the resources we have. Amber: a named risk needs a decision or help. Red: a milestone will be missed and the plan needs to change.' },
@@ -526,15 +526,15 @@
 
       { h2: 'Agenda' },
       { table: { head: ['Time', 'Item', 'Lead', 'Output'], rows: [
-        ['0:00', 'Why we are here and what this meeting must decide', cfg.dri || '[DRI]', 'Shared expectation'],
-        ['0:05', 'Context and the problem we are solving', cfg.dri || '[DRI]', 'Questions surfaced'],
-        ['0:15', 'Scope: what is in, and what we are explicitly not doing', cfg.dri || '[DRI]', 'Scope agreed'],
-        ['0:30', 'Walk the plan and the milestone dates', cfg.dri || '[DRI]', 'Dates challenged and agreed'],
-        ['0:45', 'Walk the RACI: confirm exactly one A per row', cfg.dri || '[DRI]', 'Owners named out loud'],
+        ['0:00', 'Why we are here and what this meeting must decide', cfg.dri || '[owner]', 'Shared expectation'],
+        ['0:05', 'Context and the problem we are solving', cfg.dri || '[owner]', 'Questions surfaced'],
+        ['0:15', 'Scope: what is in, and what we are explicitly not doing', cfg.dri || '[owner]', 'Scope agreed'],
+        ['0:30', 'Walk the plan and the milestone dates', cfg.dri || '[owner]', 'Dates challenged and agreed'],
+        ['0:45', 'Walk the RACI: confirm exactly one A per row', cfg.dri || '[owner]', 'Owners named out loud'],
         ['0:55', 'Top risks and who owns each', '[risk owner]', 'Owners assigned'],
-        ['1:05', 'Ways of working: cadence, single status source, escalation path', cfg.dri || '[DRI]', 'Cadence agreed'],
+        ['1:05', 'Ways of working: cadence, single status source, escalation path', cfg.dri || '[owner]', 'Cadence agreed'],
         ['1:15', 'Open questions we cannot yet answer, and who will', 'All', 'Owners and dates'],
-        ['1:25', 'Actions and close', cfg.dri || '[DRI]', 'Action list']
+        ['1:25', 'Actions and close', cfg.dri || '[owner]', 'Action list']
       ] } },
 
       { h2: 'Decisions this meeting must produce' },
@@ -559,7 +559,7 @@
     return [
       { h1: cfg.project },
       { meta: [
-        ['Owner (DRI)', cfg.dri || '[name]'],
+        ['Owner', cfg.dri || '[name]'],
         ['Sponsor', cfg.sponsor || '[name]'],
         ['Window', P.fmtLong(sched.start) + ' to ' + P.fmtLong(sched.end)],
         ['Updated', P.iso(P.today())]
@@ -589,7 +589,7 @@
       { meta: [
         ['Generated', P.iso(P.today())],
         ['Template', preset.label],
-        ['Owner (DRI)', cfg.dri || 'not set'],
+        ['Owner', cfg.dri || 'not set'],
         ['Window', P.fmtLong(sched.start) + ' to ' + P.fmtLong(sched.end) +
           ' (' + (P.diffDays(sched.start, sched.end) + 1) + ' days, ' + gran + ' Gantt columns)']
       ] },

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Initiative Kit: project docs, pre-made</title>
+<title>Strategic Quickstart: project docs, pre-made</title>
 <meta name="description" content="Pick the project documents you need, set the owners and timeline, and export a ready-made workplan, Gantt chart, RACI matrix, charter, and risk register. Runs entirely in your browser.">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
@@ -11,10 +11,10 @@
 
 <header class="hero">
   <div class="wrap">
-    <div class="brand">Initiative Kit</div>
+    <div class="brand">Strategic Quickstart</div>
     <h1>Project docs, pre-made.</h1>
     <p class="lede">
-      Choose a template, set the owners and the timeline, tick the documents you need.
+      Set up the project, tick the documents you need, adjust the phases.
       Export drops a complete, pre-filled set on your computer: workplan, Gantt chart,
       RACI matrix, charter, risk register, and more.
     </p>
@@ -34,38 +34,38 @@
       <div class="grid2">
         <label class="field span2">
           <span>Project name</span>
-          <input type="text" id="f-project" placeholder="e.g. Weather advisory scale-up" autocomplete="off">
+          <input type="text" id="f-project" placeholder="e.g. Safe Water Now expansion" autocomplete="off">
         </label>
 
-        <label class="field span2">
+        <label class="field span2" data-needs="template">
           <span>Template</span>
           <select id="f-preset"></select>
           <em class="hint" id="presetHint"></em>
         </label>
 
         <label class="field">
-          <span>Owner (DRI)</span>
-          <input type="text" id="f-dri" placeholder="Name or initials" autocomplete="off">
+          <span>Owner</span>
+          <input type="text" id="f-dri" list="peopleList" placeholder="Who is on the hook" autocomplete="off">
         </label>
-        <label class="field">
+        <label class="field" data-needs="sponsor">
           <span>Sponsor</span>
-          <input type="text" id="f-sponsor" placeholder="Who approves scope and budget" autocomplete="off">
+          <input type="text" id="f-sponsor" list="peopleList" placeholder="Who approves scope and budget" autocomplete="off">
         </label>
 
-        <label class="field">
+        <label class="field" data-needs="schedule">
           <span>Start date</span>
           <input type="date" id="f-start">
         </label>
-        <label class="field">
+        <label class="field" data-needs="schedule">
           <span>Horizon</span>
           <select id="f-horizon"></select>
         </label>
 
-        <label class="field" id="daysField" hidden>
+        <label class="field" id="daysField" data-needs="schedule" hidden>
           <span>Days</span>
           <input type="number" id="f-days" min="3" max="1460" step="1">
         </label>
-        <label class="field">
+        <label class="field" data-needs="gantt">
           <span>Gantt columns</span>
           <select id="f-gran">
             <option value="auto">Auto</option>
@@ -75,20 +75,69 @@
           </select>
         </label>
 
-        <p class="window span2" id="windowLine"></p>
+        <p class="window span2" id="windowLine" data-needs="schedule"></p>
       </div>
 
-      <div class="sub-head">
-        <h3>Team</h3>
-        <button type="button" class="btn-link" id="addMember">+ Add person</button>
+      <div id="teamSection" data-needs="team">
+        <div class="sub-head">
+          <h3>Team</h3>
+          <button type="button" class="btn-link" id="addMember">+ Add person</button>
+        </div>
+        <p class="hint">
+          Start typing a name to pick from the roster: role and initials fill in automatically.
+          Initials become the owner dropdown in every spreadsheet, names become the RACI columns.
+        </p>
+        <div id="teamRows" class="team"></div>
       </div>
-      <p class="hint">Initials become the owner dropdown in every spreadsheet. Names become the RACI columns.</p>
-      <div id="teamRows" class="team"></div>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <h2>2. Phases and tasks</h2>
+        <h2>2. Pick your documents</h2>
+        <span class="card-head-tools">
+          <button type="button" class="btn-link" id="selAll">All</button>
+          <button type="button" class="btn-link" id="selNone">None</button>
+        </span>
+      </div>
+      <p class="hint">Step 1 only asks for what your selection actually needs, so ticking fewer documents means fewer questions.</p>
+      <div id="docGrid" class="doc-grid"></div>
+
+      <div class="sub-head"><h3>Output</h3></div>
+      <div class="grid2">
+        <label class="field" id="sheetFmtField">
+          <span>Spreadsheets</span>
+          <select id="f-sheetfmt">
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
+        </label>
+        <label class="field" id="docFmtField">
+          <span>Documents</span>
+          <select id="f-docfmt">
+            <option value="md">Markdown (.md)</option>
+            <option value="html">Word-compatible (.html)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Download as</span>
+          <select id="f-bundle">
+            <option value="zip">One zip file</option>
+            <option value="files">Separate files</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Filenames</span>
+          <select id="f-naming">
+            <option value="numbered">Numbered (01-project-plan)</option>
+            <option value="dated">Date prefixed (20260731 Project plan)</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="phasesCard" data-needs="phases">
+      <div class="card-head">
+        <h2>3. Phases and tasks</h2>
         <button type="button" class="btn-link" id="resetPhases">Reset to template</button>
       </div>
       <p class="hint">
@@ -98,42 +147,6 @@
       <div id="phaseList"></div>
       <button type="button" class="btn-ghost" id="addPhase">+ Add phase</button>
       <p class="warn" id="planWarn" hidden></p>
-    </section>
-
-    <section class="card">
-      <div class="card-head">
-        <h2>3. Pick your documents</h2>
-        <span class="card-head-tools">
-          <button type="button" class="btn-link" id="selAll">All</button>
-          <button type="button" class="btn-link" id="selNone">None</button>
-        </span>
-      </div>
-      <div id="docGrid" class="doc-grid"></div>
-
-      <div class="sub-head"><h3>Output</h3></div>
-      <div class="grid2">
-        <label class="field">
-          <span>Spreadsheets</span>
-          <select id="f-sheetfmt">
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Documents</span>
-          <select id="f-docfmt">
-            <option value="md">Markdown (.md)</option>
-            <option value="html">Word-compatible (.html)</option>
-          </select>
-        </label>
-        <label class="field span2">
-          <span>Download as</span>
-          <select id="f-bundle">
-            <option value="zip">One zip file</option>
-            <option value="files">Separate files</option>
-          </select>
-        </label>
-      </div>
     </section>
 
   </div>
@@ -167,14 +180,18 @@
     what is wrong. Placeholders appear in [square brackets]; blanks are deliberate.
   </p>
   <p class="foot-meta">
-    No dependencies, no network calls. <a href="https://github.com/">Source on GitHub</a>.
+    No dependencies, no network calls.
+    <a href="https://github.com/jamesbedford-beep/strategic-quickstart">Source on GitHub</a>.
   </p>
 </footer>
+
+<datalist id="peopleList"></datalist>
 
 <script src="assets/zip.js"></script>
 <script src="assets/sheet.js"></script>
 <script src="assets/plan.js"></script>
 <script src="assets/templates.js"></script>
+<script src="assets/people.js"></script>
 <script src="assets/render.js"></script>
 <script src="assets/build.js"></script>
 <script src="assets/app.js"></script>

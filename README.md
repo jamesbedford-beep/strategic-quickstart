@@ -1,11 +1,11 @@
-# Initiative Kit
+# Strategic Quickstart
 
 A single-page tool that generates a starting set of project management documents.
-Pick a template, set the owners and the timeline, tick what you need, hit export.
+Set up the project, tick the documents you need, adjust the phases, hit export.
 A zip lands on your computer with a pre-filled workplan, Gantt chart, RACI matrix,
 charter, risk register, and more.
 
-**Live:** enable GitHub Pages on this repo (Settings, Pages, deploy from `main` / root).
+**Live:** https://jamesbedford-beep.github.io/strategic-quickstart/
 
 ## Why it exists
 
@@ -23,8 +23,8 @@ in structure, so the effort goes into the content rather than the scaffolding.
 | Project charter | .md / .html | Objective, scope and explicit non-scope, success metrics, decision rights, milestones, budget, risks, open questions, stop conditions. |
 | Risk register | .xlsx / .csv | Seeded with risks typical for the chosen template. Likelihood by impact scoring with a heat color scale. |
 | Stakeholder map | .xlsx / .csv | Influence by interest, engagement approach derived by formula, relationship owner and cadence. |
-| Decision log | .xlsx / .csv | Numbered rows: what was decided, by whom, options rejected, reversibility. |
-| Status report | .md / .html | Reusable update: RAG with defined thresholds, progress, blockers that each carry a named ask, next period. |
+| Decision log | .xlsx / .csv | What was decided, by whom, which options were rejected, reversibility. Evidence Action calls this a prolog. |
+| Status report | .md / .html | Reusable update: status, progress, blockers that each carry a named ask, next period. |
 | Kickoff agenda | .md / .html | Timed 90 minute agenda, pre-reads, and the decisions the meeting has to produce. |
 | Exec one-pager | .md / .html | Standing brief for a sponsor or funder. |
 
@@ -34,17 +34,56 @@ the exact settings, including a link that restores them in the tool.
 ## Templates
 
 `Strategic initiative`, `Scoping / diagnostic`, `Pilot / field launch`,
-`Partnership / MOU`, `Hiring / team build`, and a blank skeleton. Each ships phases,
-tasks, milestones, and a risk list. All of it is editable before export: rename phases,
-change the weights that set how much of the horizon each phase takes, and edit tasks
-as plain text (one per line, `*` prefix makes a milestone).
+`Partnership / MOU`, `Hiring / team build`, `Accelerator stage-gate`, and a blank
+skeleton. Each ships phases, tasks, milestones, and a risk list.
+
+The Accelerator template mirrors Evidence Action's new-program development stage-gate:
+Sourcing, Screening, Rapid Review, Deep Dive (split 3a/3b internally), Scoping, Design
+Testing, Launch, Test at Scale. Stage weights follow the documented timelines, each
+stage ends in a gating call, and its status vocabulary uses the four gating outcomes
+(advance, deprioritize, hold, defer). Per-stage tasks are the outputs that guidance
+names: evidence review, BOTEC and expanded CEA, project scorecard, prolog, decision memo.
+
+All of it is editable before export: rename phases, change the weights that set how much
+of the horizon each phase takes, and edit tasks as plain text (one per line, `*` prefix
+makes a milestone).
+
+## The form only asks what your selection needs
+
+Each document declares which inputs it uses. Tick only the decision log and the form
+reduces to a project name, an owner, and a team. Tick the Gantt and the start date,
+horizon, and column granularity appear. Tick a narrative document and the document
+format select appears. Nothing stays on screen that has no effect on your output.
+
+## Conventions
+
+Terminology follows what Evidence Action documents actually use rather than a generic
+default:
+
+- **Owner**, not DRI. DRI is a 2AI convention and does not appear in EvAc documents.
+- Status vocabulary is `Not Started / In Progress / On hold / Completed`, not a
+  red-amber-green scale, which the trackers do not use.
+- Filenames can be `YYYYMMDD File Name`, matching the EvAc filing convention, or
+  ordered numeric prefixes.
+
+## Team autocomplete
+
+`assets/people.js` holds an optional roster. Typing `Gra` suggests Grace Hultquist and
+fills in her initials and role. Names not on the roster still get initials derived
+automatically, and the role is left blank rather than guessed.
+
+The file is entirely optional: empty the array, delete the file, or drop its `<script>`
+tag and everything else works unchanged. Roles reflect what internal documents said at
+the time of writing and go stale as people move, so the picker is a convenience and not
+a source of truth for titles.
 
 ## Horizon
 
 Pick 2 weeks through 12 months, or a custom number of days. The phase weights spread
 across whatever window you choose and the Gantt granularity follows: daily columns for
 short horizons, weekly for a few months, monthly beyond that. Granularity can also be
-forced. Task dates snap to weekdays.
+forced. Task dates snap to weekdays. If you ask for more tasks than there are days, the
+tool says so rather than quietly producing an impossible plan.
 
 ## What it deliberately does not do
 
@@ -75,6 +114,7 @@ assets/
   sheet.js       sheet model -> .xlsx or .csv
   plan.js        date math, phase scheduling, Gantt period columns
   templates.js   presets, risk libraries, document catalog
+  people.js      optional roster for the team autocomplete
   render.js      block model -> Markdown / HTML, and the preview renderers
   build.js       one builder per document
   app.js         state, form, live preview, export
@@ -96,8 +136,8 @@ Opening `index.html` directly in a browser also works.
 ## Contributing
 
 Adding a document means: a builder in `build.js`, an entry in the `DOCS` array in
-`templates.js`, and a line in the tables above. Adding a template means one entry in
-`PRESETS` in `templates.js`.
+`templates.js` (including which inputs it `uses`), and a line in the tables above.
+Adding a template means one entry in `PRESETS` in `templates.js`.
 
 ## License
 

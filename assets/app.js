@@ -38,8 +38,31 @@
       team: [{ name: '', initials: '', role: '' }],
       phases: presetPhases('strategic-initiative'),
       docs: ['plan', 'gantt', 'raci', 'charter', 'risks', 'status'],
-      sheetfmt: 'xlsx', docfmt: 'md', bundle: 'zip'
+      sheetfmt: 'xlsx', docfmt: 'md', bundle: 'zip', naming: 'numbered'
     };
+  }
+
+  /* which inputs the current selection actually needs */
+  function needs() {
+    var set = {};
+    T.DOCS.forEach(function (d) {
+      if (state.docs.indexOf(d.id) < 0) return;
+      (d.uses || []).forEach(function (u) { set[u] = true; });
+    });
+    return set;
+  }
+
+  function applyVisibility() {
+    var n = needs();
+    var nodes = document.querySelectorAll('[data-needs]');
+    for (var i = 0; i < nodes.length; i++) {
+      var key = nodes[i].getAttribute('data-needs');
+      nodes[i].hidden = !n[key];
+    }
+    var kinds = {};
+    T.DOCS.forEach(function (d) { if (state.docs.indexOf(d.id) >= 0) kinds[d.kind] = true; });
+    $('sheetFmtField').hidden = !kinds.sheet;
+    $('docFmtField').hidden = !kinds.doc;
   }
 
   var state = defaults();
@@ -128,12 +151,20 @@
     return d.kind === 'sheet' ? state.sheetfmt : state.docfmt;
   }
 
+  /* Evidence Action files everything as "YYYYMMDD File Name", so offer that
+     alongside ordered numeric prefixes. */
+  function baseName(d) {
+    if (state.naming === 'dated') {
+      return P.iso(P.today()).replace(/-/g, '') + ' ' + d.name;
+    }
+    return String(d.order).padStart(2, '0') + '-' + d.file;
+  }
+
   /* one built artifact: { doc, base, ext, sheet | blocks } */
   function buildOne(id, c, sched) {
     var d = docById(id);
     if (!d) return null;
-    var num = String(d.order).padStart(2, '0');
-    var out = { doc: d, base: num + '-' + d.file, ext: extFor(d) };
+    var out = { doc: d, base: baseName(d), ext: extFor(d) };
     if (d.kind === 'sheet') out.sheet = SHEET_BUILDERS[id](c, sched);
     else out.blocks = DOC_BUILDERS[id](c, sched);
     return out;
@@ -184,16 +215,41 @@
     $('f-sheetfmt').value = state.sheetfmt;
     $('f-docfmt').value = state.docfmt;
     $('f-bundle').value = state.bundle;
+    $('f-naming').value = state.naming;
     $('daysField').hidden = state.horizon !== 'custom';
     var p = T.PRESETS[state.preset];
     $('presetHint').textContent = p ? p.hint : '';
+  }
+
+  /* ---------------- people roster ---------------- */
+  var ROSTER = SIK.people || [];
+  var BY_NAME = {};
+  ROSTER.forEach(function (p) { BY_NAME[p.n.toLowerCase()] = p; });
+
+  function initialsOf(name) {
+    return String(name || '').trim().split(/\s+/).slice(0, 2)
+      .map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+  }
+
+  function fillPeopleList() {
+    var dl = $('peopleList');
+    if (!dl) return;
+    /* the label carries role and team so the suggestion is disambiguating,
+       while the value stays the plain name that goes into the documents */
+    dl.innerHTML = ROSTER.map(function (p) {
+      /* only append the team when the role does not already name it */
+      var showTeam = p.t && p.r && p.r.toLowerCase().indexOf(p.t.toLowerCase()) < 0;
+      var label = p.r ? p.r + (showTeam ? ', ' + p.t : '') : (p.t || '');
+      return '<option value="' + R.esc(p.n) + '"' +
+        (label ? ' label="' + R.esc(label) + '"' : '') + '></option>';
+    }).join('');
   }
 
   function renderTeam() {
     var host = $('teamRows');
     host.innerHTML = state.team.map(function (m, i) {
       return '<div class="team-row" data-i="' + i + '">' +
-        '<input type="text" data-k="name" placeholder="Name" value="' + R.esc(m.name || '') + '" autocomplete="off">' +
+        '<input type="text" data-k="name" list="peopleList" placeholder="Name" value="' + R.esc(m.name || '') + '" autocomplete="off">' +
         '<input type="text" data-k="initials" placeholder="Init" maxlength="4" value="' + R.esc(m.initials || '') + '" autocomplete="off">' +
         '<input type="text" data-k="role" placeholder="Role" value="' + R.esc(m.role || '') + '" autocomplete="off">' +
         '<button type="button" class="btn-x" data-act="rm" title="Remove">&times;</button>' +
@@ -325,6 +381,7 @@
 
   /* refresh everything that is cheap to recompute */
   function refresh() {
+    applyVisibility();
     renderWindow();
     updatePhaseFeet();
     renderPreview();
@@ -353,7 +410,9 @@
     var rows = files.map(function (f, i) { return [f.name, built.items[i].doc.blurb]; });
     var readmeBlocks = B.readme(built.c, built.sched, rows.concat([['_config.json',
       'The exact settings used to generate this kit. Paste the "link" value into the tool to regenerate or adjust.']]));
-    var readmeName = '00-README.' + (state.docfmt === 'html' ? 'html' : 'md');
+    var readmeName = (state.naming === 'dated'
+      ? P.iso(P.today()).replace(/-/g, '') + ' README'
+      : '00-README') + '.' + (state.docfmt === 'html' ? 'html' : 'md');
     var readmeData = state.docfmt === 'html'
       ? R.toHtmlDoc(readmeBlocks, built.c.project + ' project kit')
       : R.toMarkdown(readmeBlocks);
@@ -420,6 +479,7 @@
 
   function init() {
     fillSelects();
+    fillPeopleList();
     load();
     syncForm();
     renderTeam();
@@ -427,7 +487,7 @@
     renderDocs();
     refresh();
 
-    ['project', 'dri', 'sponsor', 'start', 'gran', 'sheetfmt', 'docfmt', 'bundle']
+    ['project', 'dri', 'sponsor', 'start', 'gran', 'sheetfmt', 'docfmt', 'bundle', 'naming']
       .forEach(function (k) { bindField('f-' + k, k); });
     bindField('f-horizon', 'horizon', function (v) { return v === 'custom' ? 'custom' : parseInt(v, 10); });
     bindField('f-days', 'days', function (v) { return parseInt(v, 10) || 91; });
@@ -462,18 +522,28 @@
     $('teamRows').addEventListener('input', function (e) {
       var k = e.target.getAttribute('data-k');
       if (!k) return;
-      var i = +e.target.closest('.team-row').getAttribute('data-i');
+      var wrap = e.target.closest('.team-row');
+      var i = +wrap.getAttribute('data-i');
       state.team[i][k] = e.target.value;
+
       if (k === 'name') {
-        var initEl = e.target.parentNode.querySelector('[data-k=initials]');
+        var initEl = wrap.querySelector('[data-k=initials]');
+        var roleEl = wrap.querySelector('[data-k=role]');
+        /* picking someone off the roster fills their role too */
+        var known = BY_NAME[e.target.value.trim().toLowerCase()];
+        if (known && (!roleEl.value || roleEl.dataset.auto === '1')) {
+          roleEl.value = known.r || known.t || '';
+          roleEl.dataset.auto = '1';
+          state.team[i].role = roleEl.value;
+        }
         if (!initEl.value || initEl.dataset.auto === '1') {
-          initEl.value = e.target.value.trim().split(/\s+/).slice(0, 2)
-            .map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+          initEl.value = initialsOf(e.target.value);
           initEl.dataset.auto = '1';
           state.team[i].initials = initEl.value;
         }
       }
-      if (k === 'initials') e.target.dataset.auto = '0';
+      /* once edited by hand, stop overwriting it */
+      if (k === 'initials' || k === 'role') e.target.dataset.auto = '0';
       refresh();
     });
     $('teamRows').addEventListener('click', function (e) {
