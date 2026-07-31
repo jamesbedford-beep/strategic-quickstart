@@ -237,9 +237,7 @@
     /* the label carries role and team so the suggestion is disambiguating,
        while the value stays the plain name that goes into the documents */
     dl.innerHTML = ROSTER.map(function (p) {
-      /* only append the team when the role does not already name it */
-      var showTeam = p.t && p.r && p.r.toLowerCase().indexOf(p.t.toLowerCase()) < 0;
-      var label = p.r ? p.r + (showTeam ? ', ' + p.t : '') : (p.t || '');
+      var label = p.t || '';
       return '<option value="' + R.esc(p.n) + '"' +
         (label ? ' label="' + R.esc(label) + '"' : '') + '></option>';
     }).join('');
@@ -251,7 +249,7 @@
       return '<div class="team-row" data-i="' + i + '">' +
         '<input type="text" data-k="name" list="peopleList" placeholder="Name" value="' + R.esc(m.name || '') + '" autocomplete="off">' +
         '<input type="text" data-k="initials" placeholder="Init" maxlength="4" value="' + R.esc(m.initials || '') + '" autocomplete="off">' +
-        '<input type="text" data-k="role" placeholder="Role" value="' + R.esc(m.role || '') + '" autocomplete="off">' +
+        '<input type="text" data-k="role" placeholder="Role or team" value="' + R.esc(m.role || '') + '" autocomplete="off">' +
         '<button type="button" class="btn-x" data-act="rm" title="Remove">&times;</button>' +
         '</div>';
     }).join('');
@@ -529,10 +527,10 @@
       if (k === 'name') {
         var initEl = wrap.querySelector('[data-k=initials]');
         var roleEl = wrap.querySelector('[data-k=role]');
-        /* picking someone off the roster fills their role too */
+        /* picking someone off the roster fills in their team */
         var known = BY_NAME[e.target.value.trim().toLowerCase()];
         if (known && (!roleEl.value || roleEl.dataset.auto === '1')) {
-          roleEl.value = known.r || known.t || '';
+          roleEl.value = known.t || '';
           roleEl.dataset.auto = '1';
           state.team[i].role = roleEl.value;
         }

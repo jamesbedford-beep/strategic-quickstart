@@ -69,13 +69,15 @@ default:
 ## Team autocomplete
 
 `assets/people.js` holds an optional roster. Typing `Gra` suggests Grace Hultquist and
-fills in her initials and role. Names not on the roster still get initials derived
-automatically, and the role is left blank rather than guessed.
+fills in her initials and team. Names not on the roster still get initials derived
+automatically, and the team is left blank rather than guessed.
 
-The file is entirely optional: empty the array, delete the file, or drop its `<script>`
-tag and everything else works unchanged. Roles reflect what internal documents said at
-the time of writing and go stale as people move, so the picker is a convenience and not
-a source of truth for titles.
+It holds names and teams only. Job titles are deliberately absent: they go stale
+quickly, and this is a public repository. Where someone works is enough to tell two
+similar names apart in a picker, which is all the field is for.
+
+The file is entirely optional: empty the array, delete it, or drop its `<script>` tag
+and everything else works unchanged. Swap in your own team by replacing the entries.
 
 ## Horizon
 
