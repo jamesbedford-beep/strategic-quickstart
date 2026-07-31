@@ -34,6 +34,10 @@
     <p class="note">
       Everything runs in your browser. No accounts, no uploads, no tracking. Works offline once loaded.
     </p>
+    <p class="joke">
+      There is no server. Actually that is a lie: James is in the background making every one
+      of these by hand, really really fast. Have mercy.
+    </p>
   </div>
 </header>
 
@@ -205,21 +209,44 @@
     </div>
     <p class="hint">
       A shared board for improvements and ideas, so the team can see and discuss them
-      before anything gets built. It is backed by the GitHub issues on this repo, which is
-      what makes it shared: everyone sees the same list, and each note keeps its own
-      comment thread.
+      before anything gets built. Everyone sees the same list.
     </p>
 
     <div class="notes-actions">
-      <a class="btn-primary" id="newNoteBtn" target="_blank" rel="noopener">Add a note</a>
-      <a class="btn-ghost btn-ghost-inline" id="allNotesBtn" target="_blank" rel="noopener">Open the full board</a>
+      <button type="button" class="btn-primary" id="composeBtn">Add a note</button>
+      <a class="btn-ghost btn-ghost-inline" id="allNotesBtn" target="_blank" rel="noopener" hidden>Open in a new tab</a>
     </div>
 
-    <p class="note notes-caveat">
-      This tab is the one part of the site that talks to the network, and only when you
-      open it. Reading needs nothing; posting a note needs a GitHub account, since that is
-      what attributes it to you. Everything on the Build tab still runs entirely offline.
-    </p>
+    <div id="composeWrap" class="compose" hidden></div>
+
+    <p class="note notes-caveat" id="notesCaveat"></p>
+
+    <div id="notesSetup" class="setup" hidden>
+      <h3>Two URLs and this becomes no-login</h3>
+      <p>
+        Right now posting needs a GitHub account. To let anyone add a note without signing
+        in, put a Google Form in front of it. Roughly four minutes, no code:
+      </p>
+      <ol>
+        <li>Create a Google Form. Suggested questions: <b>Title</b> (short answer),
+          <b>What is awkward or missing</b> (paragraph), <b>What you would like instead</b>
+          (paragraph), <b>Which document or step</b> (short answer),
+          <b>How much it matters</b> (multiple choice), <b>Your name, optional</b> (short answer).</li>
+        <li>In <b>Settings</b>, make sure it does <b>not</b> require sign-in and does not
+          collect email addresses. That is what keeps it anonymous.</li>
+        <li><b>Send</b> &rarr; the link icon &rarr; untick <b>Shorten URL</b>, and copy the
+          long <code>/viewform</code> URL.</li>
+        <li>On the <b>Responses</b> tab, link it to a Google Sheet. In that sheet:
+          <b>File &rarr; Share &rarr; Publish to web</b>, pick the response tab, choose
+          <b>Comma-separated values (.csv)</b>, and Publish. Copy that URL.</li>
+        <li>Paste both into <code>assets/notes-config.js</code> and push. The tab switches
+          over on its own.</li>
+      </ol>
+      <p class="setup-note">
+        Anything submitted through the form is readable by anyone who opens this page, so
+        treat it as a public suggestion box rather than somewhere for anything sensitive.
+      </p>
+    </div>
 
     <div id="notesList" class="notes-list"></div>
   </section>
@@ -235,10 +262,6 @@
     No dependencies, no network calls.
     <a href="https://github.com/jamesbedford-beep/strategic-quickstart">Source on GitHub</a>.
   </p>
-  <p class="foot-joke">
-    There is no server. Actually that is a lie: James is in the background making every one
-    of these by hand, really really fast. Have mercy.
-  </p>
 </footer>
 
 <datalist id="peopleList"></datalist>
@@ -248,6 +271,7 @@
 <script src="assets/plan.js"></script>
 <script src="assets/templates.js"></script>
 <script src="assets/people.js"></script>
+<script src="assets/notes-config.js"></script>
 <script src="assets/render.js"></script>
 <script src="assets/build.js"></script>
 <script src="assets/app.js"></script>

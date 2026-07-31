@@ -79,6 +79,26 @@ similar names apart in a picker, which is all the field is for.
 The file is entirely optional: empty the array, delete it, or drop its `<script>` tag
 and everything else works unchanged. Swap in your own team by replacing the entries.
 
+## Team notes
+
+A second tab holds a shared board for improvements and ideas, so the team can see and
+discuss them before anything gets built.
+
+It has two backends. Out of the box it reads the GitHub issues on this repo: shared by
+construction, a thread per note, nothing to run. Reading is anonymous, but posting needs
+a GitHub account, which most people do not have.
+
+To remove that, put a Google Form in front of it: paste the form URL and its published
+response-sheet CSV URL into `assets/notes-config.js` and the tab switches over on its
+own. Anyone can then add a note with no account and no sign-in, and notes render natively
+in the page from the sheet. The page reads the column headers out of the CSV, so the
+form's questions can change without touching any code. Steps are in
+[NOTES-SETUP.md](NOTES-SETUP.md).
+
+Notes are public either way, so it is a suggestion box rather than somewhere for anything
+sensitive. This tab is the only part of the site that touches the network, and only when
+you open it.
+
 ## Horizon
 
 Pick 2 weeks through 12 months, or a custom number of days. The phase weights spread

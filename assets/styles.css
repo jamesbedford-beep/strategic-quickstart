@@ -88,6 +88,10 @@ code {
 }
 .lede { font-size: 15px; color: #414b57; max-width: 62ch; margin: 0 0 8px; }
 .note { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+.joke {
+  font-size: 12.5px; font-style: italic; color: #5b6470;
+  margin: 6px 0 0; max-width: 62ch;
+}
 
 /* ---------- layout ---------- */
 .layout {
@@ -309,6 +313,34 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 .nt-open { background: var(--status-green-bg, #e6f4ea); color: #1f7a33; }
 .nt-closed { background: #ecEEf0; color: #5b6470; }
 .nt-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+.nt-static { cursor: default; }
+.nt-static:hover { border-color: var(--border); background: var(--surface); }
+.nt-body { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.nt-field { font-size: 12.5px; margin: 5px 0; white-space: pre-wrap; }
+.nt-key {
+  display: block; font-size: 10.5px; font-weight: 650; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--text-faint); margin-bottom: 1px;
+}
+
+/* embedded form */
+.compose { margin: 0 0 16px; }
+.compose iframe {
+  width: 100%; height: 660px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+}
+.compose-foot { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; }
+
+/* setup panel, shown until the two URLs are configured */
+.setup {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin: 0 0 18px;
+}
+.setup h3 { font-size: 13px; margin: 0 0 6px; }
+.setup p { font-size: 12.5px; color: #414b57; margin: 0 0 8px; }
+.setup ol { margin: 0; padding-left: 20px; }
+.setup li { font-size: 12.5px; color: #414b57; margin: 5px 0; }
+.setup-note { margin: 10px 0 0 !important; color: var(--text-muted) !important; }
 .nt-label {
   display: inline-block; margin-left: 7px; background: var(--accent-weak); color: var(--accent-dark);
   border-radius: 3px; padding: 0 6px; font-size: 10.5px; font-weight: 600;
@@ -396,7 +428,6 @@ table.pv tr > td:first-child { min-width: 190px; position: sticky; left: 0; z-in
 .foot { padding: 22px 24px 44px; border-top: 1px solid var(--border); }
 .foot p { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; max-width: 90ch; }
 .foot-meta { font-size: 11.5px; }
-.foot-joke { font-size: 11.5px; font-style: italic; color: var(--text-faint); }
 
 /* ---------- toast ---------- */
 .toast {

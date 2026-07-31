@@ -11,7 +11,7 @@
   /* Backing store for the Team notes tab. GitHub issues are used because they are
      shared by construction: one list everyone sees, a thread per note, no server
      to run and no key to leak. Reading is unauthenticated. */
-  var REPO = 'jamesbedford-beep/strategic-quickstart';
+  var REPO = (SIK.notesConfig && SIK.notesConfig.repo) || 'jamesbedford-beep/strategic-quickstart';
   var REPO_URL = 'https://github.com/' + REPO;
 
   /* ---------------- state ---------------- */
@@ -506,7 +506,13 @@
     toast(all.length + ' files exported');
   }
 
-  /* ---------------- team notes ---------------- */
+  /* ---------------- team notes ----------------
+     Two backends. If a Google Form and a published response sheet are configured
+     in notes-config.js, anyone can post without logging into anything, and notes
+     render natively from the sheet CSV. Until then it falls back to the repo's
+     GitHub issues, which works today but needs an account to post. */
+  var NC = SIK.notesConfig || {};
+  var notesMode = (NC.formUrl && NC.csvUrl) ? 'form' : 'github';
   var notesLoaded = false;
 
   function relTime(iso) {
@@ -523,9 +529,99 @@
 
   function notesMessage(html) { $('notesList').innerHTML = '<div class="notes-msg">' + html + '</div>'; }
 
+  /* RFC4180-ish CSV parse: quoted fields, escaped quotes, newlines inside quotes */
+  function parseCsv(text) {
+    var rows = [], row = [], field = '', inQ = false, i = 0;
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for (; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (inQ) {
+        if (ch === '"') {
+          if (text.charAt(i + 1) === '"') { field += '"'; i++; }
+          else inQ = false;
+        } else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (c) { return c.trim(); }); });
+  }
+
+  /* Render whatever columns the form happens to have. The first column of a Forms
+     response sheet is the timestamp; the next non-empty one reads as the title and
+     the rest become labeled lines. That way the sheet's questions can change
+     without touching this code. */
+  function renderFormNotes(rows) {
+    var head = rows[0].map(function (h) { return h.trim(); });
+    var body = rows.slice(1);
+    if (!body.length) {
+      notesMessage('No notes yet. <b>Add a note</b> above to start the list: ' +
+        'an idea, a rough edge, or something that should work differently.');
+      return;
+    }
+    var tsIdx = 0;
+    var titleIdx = head.length > 1 ? 1 : 0;
+
+    /* newest first, by timestamp where it parses */
+    var idx = body.map(function (r, n) { return { r: r, n: n }; });
+    idx.sort(function (a, b) {
+      var da = Date.parse(a.r[tsIdx]), db = Date.parse(b.r[tsIdx]);
+      if (isNaN(da) && isNaN(db)) return b.n - a.n;
+      if (isNaN(da)) return 1;
+      if (isNaN(db)) return -1;
+      return db - da;
+    });
+
+    $('notesList').innerHTML = idx.map(function (o) {
+      var r = o.r;
+      var title = (r[titleIdx] || '').trim() || '(untitled note)';
+      var when = Date.parse(r[tsIdx]);
+      var rest = head.map(function (h, c) {
+        if (c === tsIdx || c === titleIdx) return '';
+        var v = (r[c] || '').trim();
+        if (!v) return '';
+        return '<div class="nt-field"><span class="nt-key">' + R.esc(h) + '</span>' +
+          R.esc(v) + '</div>';
+      }).join('');
+      return '<div class="nt nt-static">' +
+        '<div class="nt-top"><span class="nt-title">' + R.esc(title) + '</span></div>' +
+        '<div class="nt-meta">' + (isNaN(when) ? R.esc((r[tsIdx] || '').trim()) : relTime(new Date(when).toISOString())) + '</div>' +
+        (rest ? '<div class="nt-body">' + rest + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function loadFormNotes() {
+    notesMessage('Loading notes…');
+    /* cache-bust so a note added a moment ago actually shows up on refresh */
+    var url = NC.csvUrl + (NC.csvUrl.indexOf('?') < 0 ? '?' : '&') + 'cb=' + Date.now();
+    fetch(url).then(function (res) {
+      if (!res.ok) throw new Error('http ' + res.status);
+      return res.text();
+    }).then(function (text) {
+      var rows = parseCsv(text);
+      if (!rows.length) {
+        notesMessage('The response sheet is reachable but empty. Add the first note above.');
+        return;
+      }
+      renderFormNotes(rows);
+    }).catch(function () {
+      notesMessage('Could not read the notes sheet. It may not be published to the web yet, ' +
+        'or you may be offline. You can still add a note with the button above. ' +
+        'Setup steps are in <code>NOTES-SETUP.md</code>.');
+    });
+  }
+
   function loadNotes(force) {
     if (notesLoaded && !force) return;
     notesLoaded = true;
+    if (notesMode === 'form') { loadFormNotes(); return; }
+    loadGithubNotes();
+  }
+
+  function loadGithubNotes() {
     notesMessage('Loading notes from GitHub…');
 
     fetch('https://api.github.com/repos/' + REPO + '/issues?state=all&sort=updated&per_page=50', {
@@ -571,6 +667,52 @@
       notesMessage(msg + ' <a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">' +
         'Open the board on GitHub</a>.');
     });
+  }
+
+  /* embed the form on first click rather than on page load, so the notes tab does
+     not pull a Google iframe for people who only came to read */
+  function toggleCompose() {
+    var wrap = $('composeWrap');
+    if (notesMode !== 'form') { window.open(githubNewNoteUrl(), '_blank', 'noopener'); return; }
+    if (!wrap.innerHTML) {
+      var src = NC.formUrl + (NC.formUrl.indexOf('?') < 0 ? '?' : '&') + 'embedded=true';
+      wrap.innerHTML = '<iframe src="' + R.esc(src) + '" loading="lazy" ' +
+        'title="Add a note"></iframe>' +
+        '<p class="compose-foot">Submitted a note? <button type="button" class="btn-link" ' +
+        'id="composeDone">Refresh the list</button>. It can take a few seconds to appear.</p>';
+      wrap.querySelector('#composeDone').addEventListener('click', function () {
+        loadNotes(true);
+      });
+    }
+    wrap.hidden = !wrap.hidden;
+    $('composeBtn').textContent = wrap.hidden ? 'Add a note' : 'Hide the form';
+  }
+
+  function githubNewNoteUrl() {
+    return REPO_URL + '/issues/new?labels=idea&body=' + encodeURIComponent(
+      '**What is awkward or missing today**\n\n\n' +
+      '**What you would like instead**\n\n\n' +
+      '**Which document or step it affects**\n\n\n' +
+      '**How much it matters (nice to have / would save real time / blocking)**\n\n');
+  }
+
+  function initNotesTab() {
+    var caveat = $('notesCaveat'), all = $('allNotesBtn');
+    if (notesMode === 'form') {
+      caveat.textContent = 'Adding a note needs no account and no sign-in. This tab is the ' +
+        'one part of the site that talks to the network, and only when you open it. ' +
+        'Everything on the Build tab still runs entirely offline.';
+      all.href = NC.formUrl;
+      all.hidden = false;
+      $('notesSetup').hidden = true;
+    } else {
+      caveat.textContent = 'Reading needs nothing. Posting currently needs a GitHub account, ' +
+        'which is what attributes a note to you. The Build tab never touches the network.';
+      all.href = REPO_URL + '/issues';
+      all.textContent = 'Open the board on GitHub';
+      all.hidden = false;
+      $('notesSetup').hidden = false;
+    }
   }
 
   function showTab(name) {
@@ -781,14 +923,8 @@
       if (t) showTab(t.getAttribute('data-tab'));
     });
     $('notesRefresh').addEventListener('click', function () { loadNotes(true); });
-
-    $('newNoteBtn').href = REPO_URL + '/issues/new?labels=idea&title=' +
-      encodeURIComponent('') + '&body=' + encodeURIComponent(
-        '**What is awkward or missing today**\n\n\n' +
-        '**What you would like instead**\n\n\n' +
-        '**Which document or step it affects**\n\n\n' +
-        '**How much it matters (nice to have / would save real time / blocking)**\n\n');
-    $('allNotesBtn').href = REPO_URL + '/issues';
+    $('composeBtn').addEventListener('click', toggleCompose);
+    initNotesTab();
 
     $('linkBtn').addEventListener('click', function () {
       var url = location.origin + location.pathname + '#s=' + encodeState(state);
