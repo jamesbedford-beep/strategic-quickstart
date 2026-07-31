@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initiative Kit: project docs, pre-made</title>
+<meta name="description" content="Pick the project documents you need, set the owners and timeline, and export a ready-made workplan, Gantt chart, RACI matrix, charter, and risk register. Runs entirely in your browser.">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">Initiative Kit</div>
+    <h1>Project docs, pre-made.</h1>
+    <p class="lede">
+      Choose a template, set the owners and the timeline, tick the documents you need.
+      Export drops a complete, pre-filled set on your computer: workplan, Gantt chart,
+      RACI matrix, charter, risk register, and more.
+    </p>
+    <p class="note">
+      Everything runs in your browser. No accounts, no uploads, no tracking. Works offline once loaded.
+    </p>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <div class="col-left">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>1. Set up the project</h2>
+      </div>
+      <div class="grid2">
+        <label class="field span2">
+          <span>Project name</span>
+          <input type="text" id="f-project" placeholder="e.g. Weather advisory scale-up" autocomplete="off">
+        </label>
+
+        <label class="field span2">
+          <span>Template</span>
+          <select id="f-preset"></select>
+          <em class="hint" id="presetHint"></em>
+        </label>
+
+        <label class="field">
+          <span>Owner (DRI)</span>
+          <input type="text" id="f-dri" placeholder="Name or initials" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Sponsor</span>
+          <input type="text" id="f-sponsor" placeholder="Who approves scope and budget" autocomplete="off">
+        </label>
+
+        <label class="field">
+          <span>Start date</span>
+          <input type="date" id="f-start">
+        </label>
+        <label class="field">
+          <span>Horizon</span>
+          <select id="f-horizon"></select>
+        </label>
+
+        <label class="field" id="daysField" hidden>
+          <span>Days</span>
+          <input type="number" id="f-days" min="3" max="1460" step="1">
+        </label>
+        <label class="field">
+          <span>Gantt columns</span>
+          <select id="f-gran">
+            <option value="auto">Auto</option>
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+          </select>
+        </label>
+
+        <p class="window span2" id="windowLine"></p>
+      </div>
+
+      <div class="sub-head">
+        <h3>Team</h3>
+        <button type="button" class="btn-link" id="addMember">+ Add person</button>
+      </div>
+      <p class="hint">Initials become the owner dropdown in every spreadsheet. Names become the RACI columns.</p>
+      <div id="teamRows" class="team"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>2. Phases and tasks</h2>
+        <button type="button" class="btn-link" id="resetPhases">Reset to template</button>
+      </div>
+      <p class="hint">
+        One task per line. Prefix a line with <code>*</code> to make it a milestone: zero duration,
+        pinned to the end of its phase. Weight sets how much of the horizon a phase takes.
+      </p>
+      <div id="phaseList"></div>
+      <button type="button" class="btn-ghost" id="addPhase">+ Add phase</button>
+      <p class="warn" id="planWarn" hidden></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>3. Pick your documents</h2>
+        <span class="card-head-tools">
+          <button type="button" class="btn-link" id="selAll">All</button>
+          <button type="button" class="btn-link" id="selNone">None</button>
+        </span>
+      </div>
+      <div id="docGrid" class="doc-grid"></div>
+
+      <div class="sub-head"><h3>Output</h3></div>
+      <div class="grid2">
+        <label class="field">
+          <span>Spreadsheets</span>
+          <select id="f-sheetfmt">
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Documents</span>
+          <select id="f-docfmt">
+            <option value="md">Markdown (.md)</option>
+            <option value="html">Word-compatible (.html)</option>
+          </select>
+        </label>
+        <label class="field span2">
+          <span>Download as</span>
+          <select id="f-bundle">
+            <option value="zip">One zip file</option>
+            <option value="files">Separate files</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+  </div>
+
+  <aside class="col-right">
+    <div class="card sticky">
+      <div class="card-head">
+        <h2>Preview</h2>
+        <span class="card-head-tools">
+          <button type="button" class="btn-link" id="copyBtn" title="Copy this document to the clipboard">Copy</button>
+          <button type="button" class="btn-link" id="linkBtn" title="Copy a link that restores this exact setup">Share setup</button>
+        </span>
+      </div>
+
+      <div class="export-bar">
+        <button type="button" class="btn-primary" id="exportBtn">Export</button>
+        <span class="export-note" id="exportNote"></span>
+      </div>
+
+      <div class="pv-tabs" id="previewTabs"></div>
+      <p class="pv-file" id="previewMeta"></p>
+      <div class="pv-body" id="previewBody"></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="wrap foot">
+  <p>
+    Generated files are a scaffold, not a plan. The dates come from spreading template phases evenly
+    across your window, which is arithmetic rather than judgment: walk them with the team and change
+    what is wrong. Placeholders appear in [square brackets]; blanks are deliberate.
+  </p>
+  <p class="foot-meta">
+    No dependencies, no network calls. <a href="https://github.com/">Source on GitHub</a>.
+  </p>
+</footer>
+
+<script src="assets/zip.js"></script>
+<script src="assets/sheet.js"></script>
+<script src="assets/plan.js"></script>
+<script src="assets/templates.js"></script>
+<script src="assets/render.js"></script>
+<script src="assets/build.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
