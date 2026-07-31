@@ -917,14 +917,20 @@
       copyText(text, item.doc.name + ' copied' + (item.sheet ? ' as CSV' : ' as Markdown'));
     });
 
-    /* tabs and the shared notes board */
-    $('tabs').addEventListener('click', function (e) {
-      var t = e.target.closest('.tab');
-      if (t) showTab(t.getAttribute('data-tab'));
-    });
-    $('notesRefresh').addEventListener('click', function () { loadNotes(true); });
-    $('composeBtn').addEventListener('click', toggleCompose);
-    initNotesTab();
+    /* Tabs and the shared notes board. Wrapped because this runs last: if a
+       browser ever pairs this script with different HTML, a missing element here
+       must not take the document builder down with it. */
+    try {
+      $('tabs').addEventListener('click', function (e) {
+        var t = e.target.closest('.tab');
+        if (t) showTab(t.getAttribute('data-tab'));
+      });
+      $('notesRefresh').addEventListener('click', function () { loadNotes(true); });
+      $('composeBtn').addEventListener('click', toggleCompose);
+      initNotesTab();
+    } catch (e) {
+      if (window.console) console.warn('Team notes tab unavailable:', e && e.message);
+    }
 
     $('linkBtn').addEventListener('click', function () {
       var url = location.origin + location.pathname + '#s=' + encodeState(state);

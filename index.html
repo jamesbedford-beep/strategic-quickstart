@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Strategic Quickstart: project docs, pre-made</title>
 <meta name="description" content="Pick the project documents you need, set the owners and timeline, and export a ready-made workplan, Gantt chart, RACI matrix, charter, and risk register. Runs entirely in your browser.">
-<link rel="stylesheet" href="assets/styles.css">
+<!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
+     new HTML with a cached older script, which throws and leaves the page half
+     initialized. Same number on every asset so they can never mismatch. -->
+<link rel="stylesheet" href="assets/styles.css?v=2">
 </head>
 <body>
 
@@ -266,14 +269,14 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js"></script>
-<script src="assets/sheet.js"></script>
-<script src="assets/plan.js"></script>
-<script src="assets/templates.js"></script>
-<script src="assets/people.js"></script>
-<script src="assets/notes-config.js"></script>
-<script src="assets/render.js"></script>
-<script src="assets/build.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/zip.js?v=2"></script>
+<script src="assets/sheet.js?v=2"></script>
+<script src="assets/plan.js?v=2"></script>
+<script src="assets/templates.js?v=2"></script>
+<script src="assets/people.js?v=2"></script>
+<script src="assets/notes-config.js?v=2"></script>
+<script src="assets/render.js?v=2"></script>
+<script src="assets/build.js?v=2"></script>
+<script src="assets/app.js?v=2"></script>
 </body>
 </html>
