@@ -180,7 +180,7 @@
      naturally open with ("work out whether we should...") so what is left reads
      like a name rather than a fragment. Only ever a suggestion: the field is
      editable and sits right next to it. */
-  var NAME_LEADS = /^(?:work out|figure out|find out|work through|decide(?: on)?|determine|assess|explore|scope(?: out)?|understand|establish|we\s+(?:need to|want to|should|are trying to)|i\s+(?:need to|want to|am trying to)|try(?:ing)? to|whether(?: or not)?|if)\s+/i;
+  var NAME_LEADS = /^(?:work out|figure out|find out|work through|decide(?: on)?|determine|assess|explore|scope(?: out)?|understand|establish|we\s+(?:need to|want to|should|are trying to)|i\s+(?:need to|want to|am trying to)|try(?:ing)? to|whether(?: or not)?|if|to)\s+/i;
 
   function suggestName() {
     var g = String(answers.goal || '').trim();
