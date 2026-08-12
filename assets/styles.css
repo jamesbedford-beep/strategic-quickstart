@@ -282,6 +282,84 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 
 .export-note { font-size: 12px; color: var(--text-muted); text-align: right; }
 
+/* ---------- Start here wizard ---------- */
+.guide-pane { padding-top: 24px; padding-bottom: 48px; max-width: 780px; }
+
+.prog { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; }
+.prog-track {
+  flex: 1; height: 4px; background: var(--surface-2); border-radius: 999px; overflow: hidden;
+}
+.prog-fill { height: 100%; background: var(--accent); transition: width .25s ease; }
+.prog-text { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+
+.gq { margin: 0 0 12px; }
+.gq-q { font-size: 15px; font-weight: 620; letter-spacing: -.01em; }
+.gq-help { font-size: 12.5px; color: var(--text-muted); margin: 5px 0 10px; }
+
+/* answered, collapsed into a transcript */
+.gq-done {
+  border-left: 2px solid var(--border-strong); padding: 2px 0 2px 12px;
+}
+.gq-done .gq-q {
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+  display: flex; gap: 10px; align-items: baseline;
+}
+.gq-change { font-size: 11.5px; font-weight: 600; }
+.gq-a { font-size: 13.5px; margin-top: 2px; white-space: pre-wrap; }
+
+/* the live question */
+.gq-active {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 16px 18px; margin: 16px 0 0;
+}
+.gq-active textarea {
+  background: var(--surface); font-size: 14px; line-height: 1.55;
+}
+.gq-active textarea.needs { border-color: var(--red); box-shadow: 0 0 0 3px #fbe7e7; }
+
+.gq-opts { display: flex; flex-direction: column; gap: 7px; }
+.gq-opt {
+  font-family: var(--font); text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); padding: 10px 13px;
+}
+.gq-opt:hover { border-color: var(--accent); background: #fcfdff; }
+.gq-opt.on { border-color: var(--accent); background: var(--accent-weak); }
+.gq-opt-label { display: block; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.gq-opt-sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.gq-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 14px;
+}
+
+/* recommendation */
+.gq-result {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 18px 20px; margin-top: 16px;
+}
+.gq-result h3 { font-size: 15px; margin: 0 0 4px; }
+.gq-later { margin-top: 22px !important; }
+.rec-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 0; }
+.rec {
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 11px 13px; background: #fcfdff;
+}
+.rec-name { font-size: 13.5px; font-weight: 650; }
+.rec-blurb { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.rec-why { font-size: 12.5px; margin-top: 6px; color: #414b57; }
+.rec-later { margin: 8px 0 0; padding-left: 18px; }
+.rec-later li { font-size: 12.5px; color: var(--text-muted); margin: 4px 0; }
+.rec-later b { color: var(--text); }
+
+.rec-setup {
+  margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 11px;
+}
+.rec-setup-row { display: flex; justify-content: space-between; font-size: 13px; }
+.rec-setup-row span { color: var(--text-muted); }
+
 /* ---------- team notes ---------- */
 .notes-pane { padding-top: 24px; padding-bottom: 48px; max-width: 900px; }
 .notes-actions { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }

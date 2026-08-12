@@ -8,7 +8,7 @@
 <!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
      new HTML with a cached older script, which throws and leaves the page half
      initialized. Same number on every asset so they can never mismatch. -->
-<link rel="stylesheet" href="assets/styles.css?v=3">
+<link rel="stylesheet" href="assets/styles.css?v=4">
 </head>
 <body>
 
@@ -16,7 +16,8 @@
   <div class="wrap topbar-in">
     <div class="brand topbar-brand">Strategic Quickstart</div>
     <nav class="tabs" id="tabs" aria-label="Sections">
-      <button type="button" class="tab on" data-tab="build">Build documents</button>
+      <button type="button" class="tab on" data-tab="guide">Start here</button>
+      <button type="button" class="tab" data-tab="build">Build documents</button>
       <button type="button" class="tab" data-tab="notes">Team notes</button>
     </nav>
     <div class="topbar-actions" id="topbarActions">
@@ -44,7 +45,23 @@
   </div>
 </header>
 
-<main class="wrap layout" id="buildPane">
+<main class="wrap guide-pane" id="guidePane" hidden>
+  <section class="card">
+    <div class="card-head">
+      <h2>Let's work out what you need</h2>
+      <button type="button" class="btn-link" id="guideRestart">Start over</button>
+    </div>
+    <p class="hint">
+      A few questions in plain language. No project management vocabulary required, and
+      nothing is created until you say so. If you already know what you want,
+      <button type="button" class="btn-link" data-goto="build">skip to the builder</button>.
+    </p>
+    <div id="guideProgress" class="prog"></div>
+    <div id="guideFlow"></div>
+  </section>
+</main>
+
+<main class="wrap layout" id="buildPane" hidden>
   <div class="col-left">
 
     <section class="card card-primary">
@@ -242,14 +259,15 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js?v=3"></script>
-<script src="assets/sheet.js?v=3"></script>
-<script src="assets/plan.js?v=3"></script>
-<script src="assets/templates.js?v=3"></script>
-<script src="assets/people.js?v=3"></script>
-<script src="assets/notes-config.js?v=3"></script>
-<script src="assets/render.js?v=3"></script>
-<script src="assets/build.js?v=3"></script>
-<script src="assets/app.js?v=3"></script>
+<script src="assets/zip.js?v=4"></script>
+<script src="assets/sheet.js?v=4"></script>
+<script src="assets/plan.js?v=4"></script>
+<script src="assets/templates.js?v=4"></script>
+<script src="assets/people.js?v=4"></script>
+<script src="assets/notes-config.js?v=4"></script>
+<script src="assets/render.js?v=4"></script>
+<script src="assets/build.js?v=4"></script>
+<script src="assets/app.js?v=4"></script>
+<script src="assets/guide.js?v=4"></script>
 </body>
 </html>

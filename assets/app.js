@@ -41,6 +41,7 @@
       dri: '', sponsor: '',
       start: nextMonday(),
       horizon: 91, days: 91, gran: 'auto',
+      goal: '', signoff: '',
       team: [{ name: '', initials: '', role: '' }],
       phases: presetPhases('strategic-initiative'),
       docs: ['plan', 'gantt', 'raci', 'charter', 'risks', 'status'],
@@ -94,14 +95,16 @@
     } catch (e) { return null; }
   }
 
+  var returning = false;   /* has this browser used the builder before? */
+
   function load() {
     var fromHash = location.hash.indexOf('#s=') === 0 && decodeState(location.hash.slice(3));
-    if (fromHash) { state = Object.assign(defaults(), fromHash); return; }
+    if (fromHash) { state = Object.assign(defaults(), fromHash); returning = true; return; }
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.phases && o.docs) state = Object.assign(defaults(), o);
+        if (o && o.phases && o.docs) { state = Object.assign(defaults(), o); returning = true; }
       }
     } catch (e) { /* private mode or disabled storage: run on defaults */ }
   }
@@ -130,6 +133,8 @@
       preset: state.preset,
       dri: (state.dri || '').trim(),
       sponsor: (state.sponsor || '').trim(),
+      goal: (state.goal || '').trim(),
+      signoff: (state.signoff || '').trim(),
       startDate: state.start,
       horizonDays: horizonDays(),
       granularity: state.gran,
@@ -713,17 +718,51 @@
   }
 
   function showTab(name) {
-    var build = name !== 'notes';
-    $('buildPane').hidden = !build;
-    $('hero').hidden = !build;
-    $('notesPane').hidden = build;
-    $('topbarActions').hidden = !build;
+    var panes = { guide: 'guidePane', build: 'buildPane', notes: 'notesPane' };
+    if (!panes[name]) name = 'build';
+    Object.keys(panes).forEach(function (k) { $(panes[k]).hidden = k !== name; });
+    $('hero').hidden = name === 'notes';
+    $('topbarActions').hidden = name !== 'build';   /* Export only means something on Build */
     var tabs = $('tabs').querySelectorAll('.tab');
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].classList.toggle('on', tabs[i].getAttribute('data-tab') === name);
     }
-    if (!build) loadNotes(false);
+    if (name === 'notes') loadNotes(false);
   }
+  SIK.showTab = showTab;
+
+  /* Called by the Start here wizard once someone has answered its questions.
+     It only sets up the form; nothing is generated until they hit Export. */
+  SIK.applyGuide = function (res) {
+    state.goal = res.goal || '';
+    state.project = res.project || state.project;
+    state.dri = res.owner || state.dri;
+    /* The sign-off answer is free text like "Kyle for the go/no-go, country
+       director informed". Only promote it to Sponsor when it reads like a single
+       name; otherwise it would print as the sponsor on every document. Either
+       way it is kept and seeds the stakeholder map. */
+    state.signoff = res.signoff || '';
+    if (res.signoff && /^[A-Z][\w'-]*(\s+[A-Z][\w'-]*){0,2}$/.test(res.signoff.trim())) {
+      state.sponsor = res.signoff.trim();
+    }
+    state.preset = res.preset;
+    state.phases = presetPhases(res.preset);
+    state.horizon = res.horizon;
+    state.days = res.horizon;
+    if (res.docs && res.docs.length) state.docs = res.docs.slice();
+    /* seed the team with the owner so the RACI has a column to work with */
+    if (res.owner && !(state.team || []).some(function (m) { return (m.name || '').trim(); })) {
+      state.team = [{ name: res.owner, initials: initialsOf(res.owner), role: '' }];
+    }
+    syncForm();
+    renderTeam();
+    renderPhases();
+    renderDocs();
+    refresh();
+    showTab('build');
+    window.scrollTo(0, 0);
+    toast('Set up from your answers. Adjust anything, then Export.');
+  };
 
   var toastTimer;
   function toast(msg) {
@@ -928,6 +967,16 @@
     } catch (e) {
       if (window.console) console.warn('Team notes tab unavailable:', e && e.message);
     }
+
+    /* "skip to the builder" inside the wizard */
+    document.addEventListener('click', function (e) {
+      var g = e.target.closest('[data-goto]');
+      if (g) showTab(g.getAttribute('data-goto'));
+    });
+
+    /* First-time visitors land on the wizard, which is the whole point of it.
+       Anyone who has used the builder before goes straight back to their work. */
+    showTab(returning ? 'build' : 'guide');
 
     $('linkBtn').addEventListener('click', function () {
       var url = location.origin + location.pathname + '#s=' + encodeState(state);

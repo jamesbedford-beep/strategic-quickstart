@@ -297,6 +297,27 @@
     var seed = [];
     if (cfg.sponsor) seed.push([cfg.sponsor, '', 'Sponsor', '', 'High', 'High']);
     if (cfg.dri) seed.push([cfg.dri, '', 'Owner', '', 'High', 'High']);
+
+    /* If they answered "who needs to approve this or be kept informed" in the
+       wizard, turn each fragment into a row. Split the leading words off as the
+       name and keep the rest as what they care about, so nothing is invented and
+       nothing they typed is thrown away. */
+    (cfg.signoff || '').split(/[;,]|\band\b/).forEach(function (frag) {
+      var f = frag.trim().replace(/\.$/, '');
+      if (!f) return;
+      var words = f.split(/\s+/);
+      /* A leading run of capitalized words is a name, and the rest is what they
+         care about: "Kyle for the go/no-go" -> Kyle | for the go/no-go. With no
+         capitals it is a role, not a person ("finance sign off on budget"), so
+         put the whole phrase in the role column rather than guessing a name. */
+      var n = 0;
+      while (n < words.length && n < 3 && /^[A-Z]/.test(words[n])) n++;
+      var name = n ? words.slice(0, n).join(' ') : '';
+      var role = n ? '' : f;
+      var cares = n ? words.slice(n).join(' ') : '';
+      if (name && seed.some(function (r) { return r[0].toLowerCase() === name.toLowerCase(); })) return;
+      seed.push([name, '', role, cares, '', '']);
+    });
     (cfg.team || []).forEach(function (m) {
       var n = (m.name || '').trim();
       if (!n || n === cfg.dri || n === cfg.sponsor) return;
@@ -310,7 +331,7 @@
     seed.forEach(function (s) {
       var rn = rows.length + 1;
       rows.push(row([
-        C(s[0], 'cell'), C(s[1], 'cell'), C(s[2], 'cell'), blank('cell'),
+        C(s[0], 'cell'), C(s[1], 'cell'), C(s[2], 'cell'), C(s[3] || '', 'cell'),
         C(s[4], 'cellC'), C(s[5], 'cellC'),
         F('IF(OR(E' + rn + '="",F' + rn + '=""),"",IF(AND(E' + rn + '="High",F' + rn + '="High"),' +
           '"Manage closely",IF(E' + rn + '="High","Keep satisfied",IF(F' + rn + '="High","Keep informed","Monitor"))))', 'cell'),
@@ -425,7 +446,16 @@
       { p: '[Two or three sentences: what situation makes this worth doing now. Link to the evidence or analysis that motivated it. If a number appears here, it needs a source.]' },
 
       { h2: 'The objective' },
-      { p: '[One sentence, testable. Not "improve X" but "move X from A to B by <date>", or, for a diagnostic, "decide whether to Y by <date>".]' },
+      /* If they described the goal in their own words, that is a better starting
+         point than a placeholder. Kept verbatim and labeled as needing sharpening,
+         rather than silently reworded into something they did not say. */
+      cfg.goal
+        ? { p: cfg.goal }
+        : { p: '[One sentence, testable. Not "improve X" but "move X from A to B by <date>", or, for a diagnostic, "decide whether to Y by <date>".]' },
+      cfg.goal
+        ? { p: '_Above is what you typed when setting this up. Sharpen it into one testable ' +
+            'sentence: what moves, from what to what, by when._' }
+        : null,
 
       { h2: 'In scope' },
       { ul: ['[thing we will do]', '[thing we will do]', '[thing we will do]'] },
@@ -572,7 +602,9 @@
         ['Updated', P.iso(P.today())]
       ] },
       { h2: 'What this is' },
-      { p: '[Three sentences a busy reader can repeat accurately to someone else.]' },
+      cfg.goal
+        ? { p: cfg.goal }
+        : { p: '[Three sentences a busy reader can repeat accurately to someone else.]' },
       { h2: 'Why it matters' },
       { ul: ['[the change we expect, and for whom]', '[the size of it, with a source]',
         '[what happens if we do nothing]'] },
