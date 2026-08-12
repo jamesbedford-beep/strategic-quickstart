@@ -119,21 +119,54 @@
   var CORE_MAX = 4;          /* never open with more than this */
   var CORE_THRESHOLD = 3;
 
+  /* Pause before showing the next thing, in milliseconds. A visible beat makes the
+     tool feel considered rather than like a form that snaps at you, and people
+     trust a recommendation more when they can see it being worked out.
+     Tune here: `step` is between questions, `result` is before the
+     recommendations, `handoff` is while the builder is being filled in. Set any of
+     them to 0 to remove that pause entirely. */
+  var THINK = { step: 1200, result: 3600, handoff: 1600 };
+
+  /* Every line below is a true description of what the code is doing at that
+     moment: reading the answers, scoring the documents, building the schedule,
+     assembling the set. Nothing here claims work that is not happening. */
+  var STEP_MSGS = ['Taking that in'];
+  var RESULT_MSGS = [
+    'Reading what you told us',
+    'Weighing which documents would actually help',
+    'Fitting it to your timeline',
+    'Putting your starting set together'
+  ];
+  var HANDOFF_MSGS = ['Setting up your documents'];
+
   var answers = {};
   var step = 0;
+  var thinking = null;       /* {msgs, total} while a pause is running */
+  var thinkTimers = [];
+  /* null means "follow the recommendation". Once someone ticks or unticks
+     anything it becomes their explicit set, and any change to an answer resets it
+     so a fresh recommendation is not silently overridden by stale choices. */
+  var picked = null;
 
   /* ---------- scoring ---------- */
   function score() {
     var pts = {}, why = {};
     Object.keys(BASE).forEach(function (k) { pts[k] = BASE[k]; });
 
-    function add(boost, reason) {
+    var ev = {};      /* the answers themselves, quoted back as evidence */
+
+    function add(boost, reason, evidence) {
       if (!boost) return;
       Object.keys(boost).forEach(function (d) {
         pts[d] = (pts[d] || 0) + boost[d];
-        if (reason && boost[d] >= 2) {
+        if (boost[d] < 2) return;         /* only strong signals get explained */
+        if (reason) {
           why[d] = why[d] || [];
           if (why[d].indexOf(reason) < 0) why[d].push(reason);
+        }
+        if (evidence) {
+          ev[d] = ev[d] || [];
+          if (ev[d].indexOf(evidence) < 0) ev[d].push(evidence);
         }
       });
     }
@@ -143,19 +176,19 @@
       if (a === undefined || a === null || a === '') return;
       if (q.type === 'single') {
         var opt = q.options[a];
-        if (opt) add(opt.boost, opt.why);
+        if (opt) add(opt.boost, opt.why, opt.label);
       } else if (q.type === 'multi') {
         (a || []).forEach(function (i) {
           var o = q.options[i];
-          if (o) add(o.boost, o.why);
+          if (o) add(o.boost, o.why, o.label);
         });
       } else if (q.type === 'text' && q.boostIfAnswered && String(a).trim()) {
-        add(q.boostIfAnswered, q.why);
+        add(q.boostIfAnswered, q.why, String(a).trim());
       }
     });
 
     var ranked = Object.keys(pts).map(function (id) {
-      return { id: id, n: pts[id], why: why[id] || [] };
+      return { id: id, n: pts[id], why: why[id] || [], ev: ev[id] || [] };
     }).sort(function (a, b) { return b.n - a.n; });
 
     var core = ranked.filter(function (r) { return r.n >= CORE_THRESHOLD; }).slice(0, CORE_MAX);
@@ -206,6 +239,14 @@
     var d = SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
     return d ? d.blurb : '';
   }
+  function docHelps(id) {
+    var d = SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
+    return (d && d.helps) || (d && d.blurb) || '';
+  }
+  function docExt(id) {
+    var d = SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
+    return d && d.kind === 'sheet' ? 'xlsx' : 'md';
+  }
 
   function answerSummary(q) {
     var a = answers[q.id];
@@ -231,16 +272,64 @@
       '</div>';
     }
 
-    if (step < QUESTIONS.length) {
+    if (thinking) {
+      html += renderThinking();
+    } else if (step < QUESTIONS.length) {
       html += renderQuestion(QUESTIONS[step]);
     } else {
       html += renderResult();
     }
     host.innerHTML = html;
 
-    var focusable = host.querySelector('.gq-active textarea, .gq-active input');
-    if (focusable) focusable.focus();
+    if (!thinking) {
+      var focusable = host.querySelector('.gq-active textarea, .gq-active input');
+      if (focusable) focusable.focus();
+    }
     updateProgress();
+  }
+
+  /* ---------- the considered pause ---------- */
+  function renderThinking() {
+    return '<div class="gq-think" role="status" aria-live="polite">' +
+      '<span class="spinner" aria-hidden="true"></span>' +
+      '<span class="gq-think-msg" id="thinkMsg">' + R.esc(thinking.msgs[0]) + '</span>' +
+    '</div>';
+  }
+
+  function clearThink() {
+    thinkTimers.forEach(clearTimeout);
+    thinkTimers = [];
+    thinking = null;
+  }
+
+  /* Show a pause, cycling through msgs, then run done(). */
+  function think(msgs, total, done) {
+    if (thinking) return;                 /* already pausing: ignore */
+    if (!total) { done(); return; }        /* pause turned off in THINK */
+    thinking = { msgs: msgs };
+    render();
+
+    msgs.forEach(function (m, i) {
+      if (i === 0) return;
+      thinkTimers.push(setTimeout(function () {
+        var el = $('thinkMsg');
+        if (el) el.textContent = m;
+      }, Math.round(total * i / msgs.length)));
+    });
+
+    thinkTimers.push(setTimeout(function () {
+      clearThink();
+      done();
+    }, total));
+  }
+
+  /* move forward one question, with the appropriate pause */
+  function advance() {
+    step++;
+    var atResult = step >= QUESTIONS.length;
+    think(atResult ? RESULT_MSGS : STEP_MSGS,
+      atResult ? THINK.result : THINK.step,
+      render);
   }
 
   function renderQuestion(q) {
@@ -274,33 +363,72 @@
     return h + '</div>';
   }
 
+  function pickedCount() {
+    return Object.keys(picked || {}).filter(function (k) { return picked[k]; }).length;
+  }
+
   function renderResult() {
     var s = score();
     var preset = SIK.templates.PRESETS[presetFor()];
     var days = horizonFor();
+    if (!picked) {
+      picked = {};
+      s.core.forEach(function (r) { picked[r.id] = true; });
+    }
 
     var h = '<div class="gq gq-result">' +
-      '<h3>Start with these</h3>' +
-      '<p class="gq-help">Based on what you said. You can change any of it on the next screen, ' +
-      'and nothing is generated until you export.</p>' +
+      '<h3>Start with these ' + s.core.length + '</h3>' +
+      '<p class="gq-help">Left is what you told us. Right is what the document does about it. ' +
+      'You can change any of this on the next screen, and nothing is generated until you export.</p>' +
       '<div class="rec-list">';
 
-    s.core.forEach(function (r) {
-      h += '<div class="rec">' +
-        '<div class="rec-name">' + R.esc(docName(r.id)) + '</div>' +
-        '<div class="rec-blurb">' + R.esc(docBlurb(r.id)) + '</div>' +
-        (r.why.length
-          ? '<div class="rec-why"><b>Why:</b> ' + R.esc(r.why.join('; and ')) + '.</div>'
-          : '<div class="rec-why"><b>Why:</b> it is the backbone almost every project needs.</div>') +
+    s.core.forEach(function (r, i) {
+      var reason = r.why.length
+        ? R.esc(r.why.join('; and ')) + '.'
+        : 'Almost every project needs one, whatever else is going on.';
+      var quotes = r.ev.length
+        ? '<ul class="rec-ev">' + r.ev.map(function (e) {
+            return '<li>&ldquo;' + R.esc(e) + '&rdquo;</li>';
+          }).join('') + '</ul>'
+        : '';
+
+      h += '<div class="rec' + (picked[r.id] ? '' : ' off') + '" data-rec="' + r.id + '">' +
+        '<label class="rec-head">' +
+          '<input type="checkbox" data-doc="' + r.id + '"' + (picked[r.id] ? ' checked' : '') + '>' +
+          '<span class="rec-num">' + (i + 1) + '</span>' +
+          '<span class="rec-name">' + R.esc(docName(r.id)) + '</span>' +
+          '<span class="rec-ext">.' + R.esc(docExt(r.id)) + '</span>' +
+        '</label>' +
+        '<div class="rec-cols">' +
+          '<div class="rec-col">' +
+            '<div class="rec-k">Why we suggested it</div>' +
+            '<p class="rec-why">' + reason + '</p>' + quotes +
+          '</div>' +
+          '<div class="rec-col rec-col-help">' +
+            '<div class="rec-k">How it will help</div>' +
+            '<p class="rec-helps">' + R.esc(docHelps(r.id)) + '</p>' +
+            '<p class="rec-blurb">' + R.esc(docBlurb(r.id)) + '</p>' +
+          '</div>' +
+        '</div>' +
       '</div>';
     });
     h += '</div>';
 
-    if (s.later.length) {
-      h += '<h3 class="gq-later">Useful later, not now</h3>' +
-        '<ul class="rec-later">' + s.later.map(function (r) {
-          return '<li><b>' + R.esc(docName(r.id)) + '</b>: ' + R.esc(docBlurb(r.id)) + '</li>';
-        }).join('') + '</ul>';
+    /* Everything not recommended, still tickable. The scoring is a heuristic and
+       will sometimes be wrong, so it must never be a dead end. */
+    var coreIds = s.core.map(function (r) { return r.id; });
+    var others = SIK.templates.DOCS.filter(function (d) { return coreIds.indexOf(d.id) < 0; });
+    if (others.length) {
+      h += '<h3 class="gq-later">Not suggested, but available</h3>' +
+        '<p class="gq-help">If we read your situation wrong, add anything here.</p>' +
+        '<div class="alt-list">' + others.map(function (d) {
+          return '<label class="alt' + (picked[d.id] ? ' on' : '') + '" data-rec="' + d.id + '">' +
+            '<input type="checkbox" data-doc="' + d.id + '"' + (picked[d.id] ? ' checked' : '') + '>' +
+            '<span><span class="alt-name">' + R.esc(d.name) +
+              '<span class="rec-ext">.' + R.esc(docExt(d.id)) + '</span></span>' +
+              '<span class="alt-helps">' + R.esc(docHelps(d.id)) + '</span></span>' +
+          '</label>';
+        }).join('') + '</div>';
     }
 
     h += '<div class="rec-setup">' +
@@ -314,21 +442,27 @@
 
     h += '<div class="gq-nav">' +
       '<button type="button" class="btn-ghost btn-ghost-inline" data-back="' + (QUESTIONS.length - 1) + '">Back</button>' +
-      '<button type="button" class="btn-primary" id="gqBuild">Set this up for me</button>' +
+      '<button type="button" class="btn-primary" id="gqBuild">' + buildLabel() + '</button>' +
     '</div>';
 
     return h + '</div>';
+  }
+
+  function buildLabel() {
+    var n = pickedCount();
+    if (!n) return 'Pick at least one';
+    return 'Set up ' + n + (n === 1 ? ' document' : ' documents');
   }
 
   function updateProgress() {
     var el = $('guideProgress');
     if (!el) return;
     var total = QUESTIONS.length;
+    var label = thinking ? 'Thinking…'
+      : (step >= total ? 'Done, here is what we suggest' : 'Question ' + (step + 1) + ' of ' + total);
     el.innerHTML = '<div class="prog-track"><div class="prog-fill" style="width:' +
       Math.round(Math.min(step, total) / total * 100) + '%"></div></div>' +
-      '<span class="prog-text">' + (step >= total
-        ? 'Done, here is what we suggest'
-        : 'Question ' + (step + 1) + ' of ' + total) + '</span>';
+      '<span class="prog-text">' + label + '</span>';
   }
 
   /* ---------- interaction ---------- */
@@ -337,6 +471,7 @@
     if (!q) return true;
     if (q.type === 'text') {
       var el = $('gqText');
+      if (el && el.value !== answers[q.id]) picked = null;
       answers[q.id] = el ? el.value : '';
       if (!q.optional && !String(answers[q.id]).trim()) return false;
     }
@@ -346,11 +481,14 @@
   }
 
   function onClick(e) {
+    /* clicks during a pause would queue up behind it and fire out of order */
+    if (thinking) return;
+
     var back = e.target.closest('[data-back]');
     if (back) {
       if (step < QUESTIONS.length) commitCurrent();
       step = +back.getAttribute('data-back');
-      render();
+      render();               /* going back is instant: a wait there reads as lag */
       return;
     }
 
@@ -362,14 +500,15 @@
         answers[q.id] = answers[q.id] || [];
         var at = answers[q.id].indexOf(i);
         if (at >= 0) answers[q.id].splice(at, 1); else answers[q.id].push(i);
+        picked = null;              /* answers changed: re-recommend */
         /* toggle in place: re-rendering the whole flow on every checkbox makes the
            page jump and throws away the node that was just clicked */
         pick.classList.toggle('on', at < 0);
         pick.setAttribute('aria-pressed', at < 0 ? 'true' : 'false');
       } else {
         answers[q.id] = i;
-        step++;                     /* single choice advances straight away */
-        render();
+        picked = null;              /* answers changed: re-recommend */
+        advance();                  /* single choice moves on by itself */
       }
       return;
     }
@@ -380,29 +519,58 @@
         if (box) { box.classList.add('needs'); box.focus(); }
         return;
       }
-      step++;
-      render();
+      advance();
       return;
     }
 
     if (e.target.id === 'gqBuild') {
-      var s = score();
+      handOff();
+      return;
+    }
+  }
+
+  /* ticking a document on the results screen: update in place so the page does
+     not jump and the reasoning above stays where the reader left it */
+  function onDocToggle(e) {
+    var box = e.target.closest('[data-doc]');
+    if (!box || !picked) return;
+    var id = box.getAttribute('data-doc');
+    picked[id] = box.checked;
+    var card = $('guideFlow').querySelector('[data-rec="' + id + '"]');
+    if (card) {
+      card.classList.toggle('off', card.classList.contains('rec') && !box.checked);
+      card.classList.toggle('on', card.classList.contains('alt') && box.checked);
+    }
+    var btn = $('gqBuild');
+    if (btn) { btn.textContent = buildLabel(); btn.disabled = pickedCount() === 0; }
+  }
+
+  function handOff() {
+    if (!pickedCount()) return;
+    var name = ($('gqName') && $('gqName').value.trim()) || suggestName() || 'Untitled initiative';
+    var owner = ($('gqOwner') && $('gqOwner').value.trim()) || '';
+    var chosen = SIK.templates.DOCS.filter(function (d) { return picked[d.id]; })
+      .map(function (d) { return d.id; });
+    /* name and owner are read before the pause: showing the spinner replaces the
+       results card, so those inputs are gone by the time the callback runs */
+    think(HANDOFF_MSGS, THINK.handoff, function () {
       SIK.applyGuide({
         goal: String(answers.goal || '').trim(),
-        project: ($('gqName') && $('gqName').value.trim()) || suggestName() || 'Untitled initiative',
-        owner: ($('gqOwner') && $('gqOwner').value.trim()) || '',
+        project: name,
+        owner: owner,
         signoff: String(answers.signoff || '').trim(),
         preset: presetFor(),
         horizon: horizonFor(),
-        docs: s.core.map(function (r) { return r.id; })
+        docs: chosen
       });
-    }
+    });
   }
 
   function init() {
     var host = $('guideFlow');
     if (!host) return;
     host.addEventListener('click', onClick);
+    host.addEventListener('change', onDocToggle);
     host.addEventListener('input', function (e) {
       if (e.target.id === 'gqText') e.target.classList.remove('needs');
     });
@@ -415,7 +583,8 @@
       }
     });
     $('guideRestart').addEventListener('click', function () {
-      answers = {}; step = 0; render();
+      clearThink();
+      answers = {}; step = 0; picked = null; render();
     });
     render();
   }
