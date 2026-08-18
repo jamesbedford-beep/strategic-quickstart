@@ -647,6 +647,116 @@
     }
   };
 
+
+  /* ---------------- applying feedback ----------------
+     The last screen parses free text into declarative intents (see feedback.js);
+     this is the only place that turns them into state. Each case is deliberately
+     small and reversible in the builder afterwards, and the count returned is what
+     the screen reports back, so it can never claim more than it did. */
+  SIK.applyFeedback = function (intents) {
+    var applied = 0;
+
+    (intents || []).forEach(function (it) {
+      switch (it.type) {
+        case 'addDoc':
+          if (state.docs.indexOf(it.value) < 0) { state.docs.push(it.value); applied++; }
+          break;
+        case 'removeDoc':
+          var at = state.docs.indexOf(it.value);
+          if (at >= 0) { state.docs.splice(at, 1); applied++; }
+          break;
+        case 'addRisk':
+          state.worries = [it.value].concat(state.worries || []);
+          /* a risk is no use without the register to hold it */
+          if (state.docs.indexOf('risks') < 0) state.docs.push('risks');
+          applied++;
+          break;
+        case 'addScope':
+          state.inScope = (state.inScope || []).concat([it.value]);
+          if (state.docs.indexOf('charter') < 0) state.docs.push('charter');
+          applied++;
+          break;
+        case 'addOutScope':
+          state.outScope = (state.outScope || []).concat([it.value]);
+          if (state.docs.indexOf('charter') < 0) state.docs.push('charter');
+          applied++;
+          break;
+        case 'addAround':
+          state.around = (state.around || []).concat([it.value]);
+          applied++;
+          break;
+        case 'setCadence':
+          state.cadence = it.value;
+          applied++;
+          break;
+        case 'rename':
+          state.project = it.value;
+          applied++;
+          break;
+        case 'setStart':
+          state.start = it.value;
+          applied++;
+          break;
+        case 'setLength':
+          rescalePhases(it.value);
+          applied++;
+          break;
+        case 'addStage':
+          state.phases.push({ name: it.value, days: 14, owner: '', tasks: 'First task\n* ' + it.value + ' complete' });
+          applied++;
+          break;
+        case 'addPerson':
+          var nm = (it.value.name || '').trim();
+          if (!nm) break;
+          var already = (state.team || []).some(function (m) {
+            return (m.name || '').trim().toLowerCase() === nm.toLowerCase();
+          });
+          if (already) break;
+          var known = BY_NAME[nm.toLowerCase()];
+          /* a bare first name usually identifies someone on the roster */
+          if (!known) {
+            var hits = ROSTER.filter(function (per) {
+              return per.n.split(/\s+/)[0].toLowerCase() === nm.toLowerCase();
+            });
+            if (hits.length === 1) { known = hits[0]; nm = hits[0].n; }
+          }
+          state.team.push({
+            name: nm, initials: initialsOf(nm),
+            role: (known && known.t) || '', ask: it.value.ask || ''
+          });
+          applied++;
+          break;
+      }
+    });
+
+    if (applied) {
+      syncForm();
+      renderTeam();
+      renderPhases();
+      renderDocs();
+      refresh();
+    }
+    return applied;
+  };
+
+  /* what the delivery screen needs to summarise the setup */
+  SIK.summary = function () {
+    var c = cfg();
+    var sched = P.buildSchedule(c);
+    return {
+      project: c.project,
+      owner: c.dri,
+      template: (T.PRESETS[c.preset] || {}).label || c.preset,
+      start: P.fmtLong(sched.start),
+      end: P.fmtLong(sched.end),
+      days: totalPhaseDays(),
+      stages: c.phases.length,
+      docs: selectedIds(),
+      team: (c.team || []).length,
+      cadence: state.cadence || ''
+    };
+  };
+
   /* used by the wizard's last screen */
   SIK.setFormats = function (f) {
     if (f.sheet) state.sheetfmt = f.sheet;

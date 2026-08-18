@@ -158,9 +158,20 @@ The wizard used to end by dropping people into the builder, which left them wond
 had happened. It now finishes on its own screen: the documents it made, with a format
 picker and one large Export button, and underneath, a box for saying what they would change.
 
-That box is honest about itself. It records the request for the next version of the tool; it
-does not edit the files there and then. Next to it is a link into the builder, which is
-where editing actually happens.
+That box changes the documents. Type "add a decision log and drop the Gantt, add a risk that
+approval slips, running a pilot is out of scope, make it 12 weeks" and all four happen.
+
+There is no model doing the interpreting, so `assets/feedback.js` reads a defined set of
+intents with plain regular expressions and, crucially, **shows what it understood before
+applying anything**. Each understood instruction is a tickable line, things that were already
+true are listed as such, and anything it cannot act on is shown as not understood rather than
+silently dropped. A parser that quietly ignores half a sentence is worse than one that admits
+the gap.
+
+It handles: adding or dropping a document, adding a risk, adding to either scope list,
+adding a person and what is needed from them, the update cadence, adding a stage, the overall
+length, the start date, dates to plan around, and renaming. Anything else is recorded for the
+register and left to the builder, which is linked right there.
 
 ## Changelog
 

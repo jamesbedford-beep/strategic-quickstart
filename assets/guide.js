@@ -698,17 +698,32 @@
       SIK.setFormats({
         sheet: $('dlSheet').value, doc: $('dlDoc').value, bundle: $('dlBundle').value
       });
-      SIK.exportNow($('dlFeedback') ? $('dlFeedback').value.trim() : '');
-      $('dlNote').textContent = 'Exported. Check your downloads folder.';
+      SIK.exportNow(lastFeedbackText);
+      $('dlNote').textContent = 'Downloaded. Check your downloads folder.';
       return;
     }
 
-    if (e.target.id === 'dlSendFb') {
-      var txt = $('dlFeedback') ? $('dlFeedback').value.trim() : '';
-      if (!txt) { $('dlFeedback').focus(); return; }
-      SIK.logFeedback(txt);
-      $('dlFeedback').value = '';
-      $('dlNote').textContent = 'Feedback sent. Thank you.';
+    /* read the box, show what was understood, change nothing yet */
+    if (e.target.id === 'dlRead') {
+      lastFeedbackText = ($('dlFeedback') && $('dlFeedback').value.trim()) || '';
+      if (!lastFeedbackText) { $('dlFeedback').focus(); return; }
+      fbResult = SIK.feedback.parse(lastFeedbackText, { docs: SIK.summary().docs });
+      render();
+      return;
+    }
+
+    /* apply only the boxes still ticked */
+    if (e.target.id === 'dlApply') {
+      var keep = [];
+      $('guideFlow').querySelectorAll('[data-fbi]').forEach(function (box) {
+        if (box.checked) keep.push(fbResult.changes[+box.getAttribute('data-fbi')]);
+      });
+      var n = SIK.applyFeedback(keep);
+      fbApplied += n;
+      fbResult = null;
+      if ($('dlFeedback')) $('dlFeedback').value = '';
+      render();
+      window.scrollTo(0, 0);
       return;
     }
 
@@ -1160,58 +1175,126 @@
 
 
   /* ---------- the last screen ----------
-     Dropping someone into the builder at the end left them wondering what had
-     happened. Instead: here is what was made, here is how to take it, and here is
-     what to do if it is not right. */
+     Reads top to bottom as: here is what we understood, here is what is ready,
+     take it. The summary sits above the documents so the inputs are visible at a
+     glance instead of buried in the transcript. */
+  var fbResult = null;      /* the last parse, awaiting confirmation */
+  var lastFeedbackText = '';
+  var fbApplied = 0;
+
   function renderDeliver() {
-    var c = SIK.guideResult || {};
-    var docs = (c.docs || []).map(function (id) {
-      var d = SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
-      return d ? d : null;
+    var sum = SIK.summary();
+    var docs = sum.docs.map(function (id) {
+      return SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
     }).filter(Boolean);
 
-    var h = '<div class="gq gq-active ac deliver">' +
-      '<p class="ac-q">Your documents are ready</p>' +
-      '<p class="ac-help">Set up from your answers, and nothing has been sent anywhere. ' +
-        'Check the shape below, choose a format, and export.</p>' +
-      '<div class="dl-list">' + docs.map(function (d) {
-        return '<div class="dl-item">' +
+    var facts = [
+      ['Owner', sum.owner || 'not set'],
+      ['Approach', sum.template],
+      ['Runs', sum.start + ' to ' + sum.end],
+      ['Length', sum.days + ' days across ' + sum.stages +
+        (sum.stages === 1 ? ' stage' : ' stages')]
+    ];
+    if (sum.team) facts.push(['Team', sum.team + (sum.team === 1 ? ' person' : ' people')]);
+    if (sum.cadence) facts.push(['Updates', sum.cadence]);
+
+    var h = '<div class="dlv">' +
+
+      /* --- summary of everything they told us --- */
+      '<div class="dlv-sum">' +
+        '<h3 class="dlv-title">' + R.esc(sum.project) + '</h3>' +
+        '<dl class="dlv-facts">' + facts.map(function (f) {
+          return '<div><dt>' + R.esc(f[0]) + '</dt><dd>' + R.esc(f[1]) + '</dd></div>';
+        }).join('') + '</dl>' +
+      '</div>' +
+
+      /* --- the ready banner --- */
+      '<div class="dlv-ready">' +
+        '<span class="dlv-check" aria-hidden="true">&#10003;</span>' +
+        '<span><b>' + docs.length + ' document' + (docs.length === 1 ? '' : 's') +
+          ' ready to download</b>' +
+          '<em>Built in your browser from your answers. Nothing has been sent anywhere.</em>' +
+        '</span>' +
+      '</div>' +
+
+      /* --- the documents, as a grid --- */
+      '<div class="dlv-grid">' + docs.map(function (d) {
+        return '<div class="dlv-doc">' +
           '<span class="dl-ext ' + (d.kind === 'sheet' ? 'is-x' : 'is-d') + '">' +
             (d.kind === 'sheet' ? 'XLS' : 'DOC') + '</span>' +
-          '<span><span class="dl-name">' + R.esc(d.name) + '</span>' +
-            '<span class="dl-helps">' + R.esc(d.helps || d.blurb || '') + '</span></span>' +
+          '<span class="dlv-doc-body">' +
+            '<span class="dl-name">' + R.esc(d.name) + '</span>' +
+            '<span class="dl-helps">' + R.esc(d.helps || d.blurb || '') + '</span>' +
+          '</span>' +
         '</div>';
       }).join('') + '</div>' +
 
-      '<div class="dl-fmt">' +
-        '<label class="ff"><span>Spreadsheets</span>' +
-          '<select id="dlSheet"><option value="xlsx">Excel (.xlsx)</option>' +
-          '<option value="csv">CSV (.csv)</option></select></label>' +
-        '<label class="ff"><span>Documents</span>' +
-          '<select id="dlDoc"><option value="md">Markdown (.md)</option>' +
-          '<option value="html">Word-compatible (.html)</option></select></label>' +
-        '<label class="ff"><span>Download</span>' +
-          '<select id="dlBundle"><option value="zip">One zip file</option>' +
-          '<option value="files">Separate files</option></select></label>' +
+      /* --- take it --- */
+      '<div class="dlv-take">' +
+        '<div class="dlv-fmt">' +
+          '<label class="ff"><span>Spreadsheets</span>' +
+            '<select id="dlSheet"><option value="xlsx">Excel (.xlsx)</option>' +
+            '<option value="csv">CSV (.csv)</option></select></label>' +
+          '<label class="ff"><span>Documents</span>' +
+            '<select id="dlDoc"><option value="md">Markdown (.md)</option>' +
+            '<option value="html">Word (.html)</option></select></label>' +
+          '<label class="ff"><span>As</span>' +
+            '<select id="dlBundle"><option value="zip">One zip</option>' +
+            '<option value="files">Separate files</option></select></label>' +
+        '</div>' +
+        '<button type="button" class="btn-primary dl-go" id="dlExport">' +
+          'Download ' + docs.length + ' document' + (docs.length === 1 ? '' : 's') + '</button>' +
+        '<p class="dl-note" id="dlNote">' +
+          (fbApplied ? fbApplied + ' change' + (fbApplied === 1 ? '' : 's') +
+            ' applied. The documents above are up to date.' : '') + '</p>' +
       '</div>' +
 
-      '<button type="button" class="btn-primary dl-go" id="dlExport">Export my documents</button>' +
-      '<p class="dl-note" id="dlNote"></p>' +
-
-      '<div class="dl-more">' +
-        '<p class="ac-q">Not quite right?</p>' +
-        '<label class="ff"><span>Tell me what you would change</span>' +
-          '<textarea id="dlFeedback" rows="3" placeholder="e.g. the risk register should start with funding risks, or we need a separate budget sheet"></textarea></label>' +
-        '<p class="ac-help">This is recorded so the tool can be changed for next time. It does ' +
-          'not edit your files now. To change them yourself, open the builder, where every ' +
-          'field is editable and the preview updates as you type.</p>' +
-        '<div class="dl-more-row">' +
-          '<button type="button" class="btn-ghost btn-ghost-inline" id="dlSendFb">Send this feedback</button>' +
-          '<button type="button" class="btn-ghost btn-ghost-inline" data-goto="build">Open the builder and keep editing</button>' +
+      /* --- changes --- */
+      '<div class="dlv-more">' +
+        '<p class="dlv-more-q">Want something different?</p>' +
+        '<p class="dlv-more-help">Say it plainly and it will change the documents before you ' +
+          'download. Things like <em>add a decision log</em>, <em>drop the Gantt</em>, ' +
+          '<em>add a risk that approval slips</em>, <em>running a pilot is out of scope</em>, ' +
+          '<em>make it 12 weeks</em>, <em>weekly updates</em>, or <em>add Priya, she signs off ' +
+          'the budget</em>.</p>' +
+        '<textarea id="dlFeedback" rows="3" placeholder="Add a decision log and make it 12 weeks"></textarea>' +
+        '<div class="dlv-more-row">' +
+          '<button type="button" class="btn-primary btn-sm" id="dlRead">Apply to my documents</button>' +
+          '<button type="button" class="btn-ghost btn-ghost-inline" data-goto="build">Or edit every field yourself</button>' +
         '</div>' +
+        (fbResult ? renderParse(fbResult) : '') +
       '</div>' +
     '</div>';
     return h;
+  }
+
+  /* what the parser understood, shown before anything is applied */
+  function renderParse(res) {
+    var h = '<div class="fb-read">';
+    if (res.changes.length) {
+      h += '<p class="fb-read-k">I can do this</p><ul class="fb-ok">' +
+        res.changes.map(function (c, i) {
+          return '<li><label><input type="checkbox" data-fbi="' + i + '" checked>' +
+            '<span>' + R.esc(c.label) + '</span></label></li>';
+        }).join('') + '</ul>';
+    }
+    if (res.noops.length) {
+      h += '<p class="fb-read-k">Already the case</p><ul class="fb-no">' +
+        res.noops.map(function (n) { return '<li>' + R.esc(n) + '</li>'; }).join('') + '</ul>';
+    }
+    if (res.unmatched.length) {
+      h += '<p class="fb-read-k">I could not act on this</p><ul class="fb-no">' +
+        res.unmatched.map(function (u) { return '<li>&ldquo;' + R.esc(u) + '&rdquo;</li>'; }).join('') +
+        '</ul><p class="fb-read-note">Recorded so the tool can learn to handle it. ' +
+        'To make this change now, edit the fields directly in the builder.</p>';
+    }
+    if (!res.changes.length && !res.noops.length && !res.unmatched.length) {
+      h += '<p class="fb-read-note">Nothing to act on there.</p>';
+    }
+    if (res.changes.length) {
+      h += '<button type="button" class="btn-primary btn-sm" id="dlApply">Make these changes</button>';
+    }
+    return h + '</div>';
   }
 
   function renderStage() {
@@ -1438,7 +1521,7 @@
     $('guideRestart').addEventListener('click', function () {
       clearThink();
       answers = {}; step = 0; picked = null;
-      mode = 'ask'; shapeIdx = 0; shape = {};
+      mode = 'ask'; shapeIdx = 0; shape = {}; fbResult = null; fbApplied = 0; lastFeedbackText = '';
       render();
     });
     render();
