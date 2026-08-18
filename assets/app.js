@@ -889,8 +889,21 @@
     });
   }
 
+  /* The one file that cannot be cache-busted is index.html itself, so a stale page
+     can quietly pair old HTML with old scripts and look simply out of date. This
+     prints the version the browser actually loaded, which makes that visible
+     instead of a guessing game. */
+  function showBuild() {
+    var el = $('buildStamp');
+    if (!el) return;
+    var tag = document.querySelector('script[src*="app.js"]');
+    var m = tag && tag.getAttribute('src').match(/[?&]v=(\d+)/);
+    el.textContent = 'Build ' + (m ? m[1] : 'dev') + '.';
+  }
+
   function init() {
     fillSelects();
+    showBuild();
     fillPeopleList();
     load();
     migratePhases();

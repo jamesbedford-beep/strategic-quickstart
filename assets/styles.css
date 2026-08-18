@@ -944,3 +944,5 @@ body.dragging { cursor: ew-resize; user-select: none; }
   .dlv-grid, .dlv-fmt { grid-template-columns: 1fr; }
   .dlv-more-row { flex-direction: column; align-items: stretch; }
 }
+
+#buildStamp { font-family: var(--mono); color: var(--text-faint); margin-right: 6px; }
