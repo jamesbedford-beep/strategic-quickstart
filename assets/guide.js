@@ -1200,19 +1200,11 @@
 
     var h = '<div class="dlv">' +
 
-      /* --- summary of everything they told us --- */
-      '<div class="dlv-sum">' +
-        '<h3 class="dlv-title">' + R.esc(sum.project) + '</h3>' +
-        '<dl class="dlv-facts">' + facts.map(function (f) {
-          return '<div><dt>' + R.esc(f[0]) + '</dt><dd>' + R.esc(f[1]) + '</dd></div>';
-        }).join('') + '</dl>' +
-      '</div>' +
-
       /* --- the ready banner --- */
       '<div class="dlv-ready">' +
         '<span class="dlv-check" aria-hidden="true">&#10003;</span>' +
         '<span><b>' + docs.length + ' document' + (docs.length === 1 ? '' : 's') +
-          ' ready to download</b>' +
+          ' ready for ' + R.esc(sum.project) + '</b>' +
           '<em>Built in your browser from your answers. Nothing has been sent anywhere.</em>' +
         '</span>' +
       '</div>' +
@@ -1247,6 +1239,15 @@
         '<p class="dl-note" id="dlNote">' +
           (fbApplied ? fbApplied + ' change' + (fbApplied === 1 ? '' : 's') +
             ' applied. The documents above are up to date.' : '') + '</p>' +
+      '</div>' +
+
+      /* --- what it was built from: reference, so it sits under the outcome --- */
+      '<div class="dlv-sum">' +
+        '<p class="dlv-sum-k">Built from what you told us</p>' +
+        '<h3 class="dlv-title">' + R.esc(sum.project) + '</h3>' +
+        '<dl class="dlv-facts">' + facts.map(function (f) {
+          return '<div><dt>' + R.esc(f[0]) + '</dt><dd>' + R.esc(f[1]) + '</dd></div>';
+        }).join('') + '</dl>' +
       '</div>' +
 
       /* --- changes --- */
