@@ -79,25 +79,46 @@ similar names apart in a picker, which is all the field is for.
 The file is entirely optional: empty the array, delete it, or drop its `<script>` tag
 and everything else works unchanged. Swap in your own team by replacing the entries.
 
-## Team notes
+## Start here: the guided route
 
-A second tab holds a shared board for improvements and ideas, so the team can see and
-discuss them before anything gets built.
+The homepage is a conversation, not a form. Everyone lands there; the **Custom build**
+tab is always available for people who already know what they want, and `#build`
+deep-links straight to it.
 
-It has two backends. Out of the box it reads the GitHub issues on this repo: shared by
-construction, a thread per note, nothing to run. Reading is anonymous, but posting needs
-a GitHub account, which most people do not have.
+It runs in two halves.
 
-To remove that, put a Google Form in front of it: paste the form URL and its published
-response-sheet CSV URL into `assets/notes-config.js` and the tab switches over on its
-own. Anyone can then add a note with no account and no sign-in, and notes render natively
-in the page from the sheet. The page reads the column headers out of the CSV, so the
-form's questions can change without touching any code. Steps are in
-[NOTES-SETUP.md](NOTES-SETUP.md).
+**Which documents do you need.** Six questions in plain language, opening with "in your
+own words, what are you trying to get done?". It then recommends at most four documents
+and shows its reasoning side by side: why it suggested each one, quoting the answers that
+drove it, against what that document will do for you. Nothing is a dead end, so every
+recommendation can be unticked and every document that was not suggested can be added.
 
-Notes are public either way, so it is a suggestion box rather than somewhere for anything
-sensitive. This tab is the only part of the site that touches the network, and only when
-you open it.
+**What goes inside them.** Knowing you need a Gantt is only half the job. The second half
+proposes a shape and asks whether it is right:
+
+> You said this quarter, working out whether to do something. Over those 91 days I propose
+> 5 stages of about 18 days each, each ending in a milestone, so something lands roughly
+> every 3 weeks.
+
+Each stage is listed with the dates it would actually get, computed by the same scheduler
+that writes the spreadsheet. Accept it, or rewrite the stages and watch the timeline
+redistribute. Later stages ask what is in and deliberately out of scope, who is involved,
+what worries you most, and how often you will update people. Only the stages your
+selection needs are asked, so someone who wanted a decision log is never asked about
+scope.
+
+All of it lands in the documents: scope lists become the charter's in and out of scope
+sections, worries become the first rows of the risk register above the generic ones, names
+become RACI columns with initials and teams filled in, the cadence sets the reporting
+period, and the stage names become the phases of the plan and Gantt.
+
+Deliberately not an LLM. This page is static and public, so there is nowhere to keep an
+API key, and a scripted flow is better here anyway: it works offline, answers instantly,
+costs nothing, and can say exactly why it suggested something. Free-form chat would need a
+backend.
+
+The questions, scoring weights, and shaping stages are plain data at the top of
+`assets/guide.js`, which is where to go when the wording turns out to be wrong.
 
 ## Horizon
 
@@ -137,6 +158,7 @@ assets/
   plan.js        date math, phase scheduling, Gantt period columns
   templates.js   presets, risk libraries, document catalog
   people.js      optional roster for the team autocomplete
+  guide.js       the Start here wizard: questions, scoring, shaping stages
   render.js      block model -> Markdown / HTML, and the preview renderers
   build.js       one builder per document
   app.js         state, form, live preview, export

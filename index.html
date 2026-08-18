@@ -8,7 +8,7 @@
 <!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
      new HTML with a cached older script, which throws and leaves the page half
      initialized. Same number on every asset so they can never mismatch. -->
-<link rel="stylesheet" href="assets/styles.css?v=6">
+<link rel="stylesheet" href="assets/styles.css?v=7">
 </head>
 <body>
 
@@ -17,8 +17,7 @@
     <div class="brand topbar-brand">Strategic Quickstart</div>
     <nav class="tabs" id="tabs" aria-label="Sections">
       <button type="button" class="tab on" data-tab="guide">Start here</button>
-      <button type="button" class="tab" data-tab="build">Build documents</button>
-      <button type="button" class="tab" data-tab="notes">Team notes</button>
+      <button type="button" class="tab" data-tab="build">Custom build</button>
     </nav>
     <div class="topbar-actions" id="topbarActions">
       <span class="export-note" id="exportNote"></span>
@@ -219,32 +218,6 @@
   </aside>
 </main>
 
-<main class="wrap notes-pane" id="notesPane" hidden>
-  <section class="card">
-    <div class="card-head">
-      <h2>Team notes</h2>
-      <span class="card-head-tools">
-        <button type="button" class="btn-link" id="notesRefresh">Refresh</button>
-      </span>
-    </div>
-    <p class="hint">
-      A shared board for improvements and ideas, so the team can see and discuss them
-      before anything gets built. Everyone sees the same list.
-    </p>
-
-    <div class="notes-actions">
-      <button type="button" class="btn-primary" id="composeBtn">Add a note</button>
-      <a class="btn-ghost btn-ghost-inline" id="allNotesBtn" target="_blank" rel="noopener" hidden>Open in a new tab</a>
-    </div>
-
-    <div id="composeWrap" class="compose" hidden></div>
-
-    <p class="note notes-caveat" id="notesCaveat"></p>
-
-    <div id="notesList" class="notes-list"></div>
-  </section>
-</main>
-
 <footer class="wrap foot">
   <p>
     Generated files are a scaffold, not a plan. The dates come from spreading template phases evenly
@@ -259,15 +232,14 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js?v=6"></script>
-<script src="assets/sheet.js?v=6"></script>
-<script src="assets/plan.js?v=6"></script>
-<script src="assets/templates.js?v=6"></script>
-<script src="assets/people.js?v=6"></script>
-<script src="assets/notes-config.js?v=6"></script>
-<script src="assets/render.js?v=6"></script>
-<script src="assets/build.js?v=6"></script>
-<script src="assets/app.js?v=6"></script>
-<script src="assets/guide.js?v=6"></script>
+<script src="assets/zip.js?v=7"></script>
+<script src="assets/sheet.js?v=7"></script>
+<script src="assets/plan.js?v=7"></script>
+<script src="assets/templates.js?v=7"></script>
+<script src="assets/people.js?v=7"></script>
+<script src="assets/render.js?v=7"></script>
+<script src="assets/build.js?v=7"></script>
+<script src="assets/app.js?v=7"></script>
+<script src="assets/guide.js?v=7"></script>
 </body>
 </html>

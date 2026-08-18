@@ -15,6 +15,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var R = SIK.render;
+  var P = SIK.plan;
 
   /* ---------- the script ----------
      Each option can carry:
@@ -138,6 +139,7 @@
     'Putting your starting set together'
   ];
   var HANDOFF_MSGS = ['Setting up your documents'];
+  var SHAPE_MSGS = ['Working out what to ask you next'];
 
   var answers = {};
   var step = 0;
@@ -147,6 +149,14 @@
      anything it becomes their explicit set, and any change to an answer resets it
      so a fresh recommendation is not silently overridden by stale choices. */
   var picked = null;
+
+  /* Stage two of the conversation. Once we know which documents someone needs,
+     keep going and shape the contents: propose a phase structure for a Gantt, ask
+     what is in and out of scope for a charter, and so on. Getting the right
+     documents is only half the job; getting them the right shape is the rest. */
+  var mode = 'ask';          /* 'ask' -> 'result' -> 'shape' */
+  var shapeIdx = 0;
+  var shape = {};
 
   /* ---------- scoring ---------- */
   function score() {
@@ -207,6 +217,23 @@
     var a = answers.when;
     var opt = a != null && QUESTIONS[2].options[a];
     return (opt && opt.set && opt.set.horizon) || 91;
+  }
+  function horizonLabel() {
+    var a = answers.when;
+    var opt = a != null && QUESTIONS[2].options[a];
+    return opt ? opt.label.toLowerCase().replace(/^it's /, '') : 'this quarter';
+  }
+  function kindLabel() {
+    var a = answers.kind;
+    var opt = a != null && QUESTIONS[1].options[a];
+    return opt ? opt.label.toLowerCase() : '';
+  }
+  /* the builder starts projects on the next Monday; mirror that so the dates we
+     propose here are the dates they actually get */
+  function startDate() {
+    var d = P.today();
+    while (d.getUTCDay() !== 1) d = P.addDays(d, 1);
+    return P.iso(d);
   }
 
   /* A starting project name from the goal sentence. Strips the framing people
@@ -272,8 +299,12 @@
       '</div>';
     }
 
+    if (mode === 'shape') html += renderStageDone();
+
     if (thinking) {
       html += renderThinking();
+    } else if (mode === 'shape') {
+      html += renderStage();
     } else if (step < QUESTIONS.length) {
       html += renderQuestion(QUESTIONS[step]);
     } else {
@@ -304,7 +335,11 @@
 
   /* Show a pause, cycling through msgs, then run done(). */
   function think(msgs, total, done) {
-    if (thinking) return;                 /* already pausing: ignore */
+    /* If a pause is already running, cancel it and start this one. Returning
+       early here would drop the request while the caller had already advanced
+       its state, leaving the flow wedged on "Thinking..." with no pending
+       timer and nothing to re-render it. */
+    if (thinking) clearThink();
     if (!total) { done(); return; }        /* pause turned off in THINK */
     thinking = { msgs: msgs };
     render();
@@ -451,18 +486,28 @@
   function buildLabel() {
     var n = pickedCount();
     if (!n) return 'Pick at least one';
-    return 'Set up ' + n + (n === 1 ? ' document' : ' documents');
+    if (mode === 'shape') return 'Set up my ' + n + (n === 1 ? ' document' : ' documents');
+    return 'Next: shape these ' + n;
   }
 
   function updateProgress() {
     var el = $('guideProgress');
     if (!el) return;
     var total = QUESTIONS.length;
-    var label = thinking ? 'Thinking…'
-      : (step >= total ? 'Done, here is what we suggest' : 'Question ' + (step + 1) + ' of ' + total);
+    var label, pct;
+    if (mode === 'shape') {
+      var stages = activeStages();
+      /* second half of the bar belongs to shaping */
+      pct = 50 + Math.round(shapeIdx / Math.max(1, stages.length) * 50);
+      label = thinking ? 'Thinking…'
+        : 'Shaping your documents, ' + (shapeIdx + 1) + ' of ' + stages.length;
+    } else {
+      pct = Math.round(Math.min(step, total) / total * 50);
+      label = thinking ? 'Thinking…'
+        : (step >= total ? 'Here is what we suggest' : 'Question ' + (step + 1) + ' of ' + total);
+    }
     el.innerHTML = '<div class="prog-track"><div class="prog-fill" style="width:' +
-      Math.round(Math.min(step, total) / total * 100) + '%"></div></div>' +
-      '<span class="prog-text">' + label + '</span>';
+      pct + '%"></div></div><span class="prog-text">' + label + '</span>';
   }
 
   /* ---------- interaction ---------- */
@@ -486,6 +531,7 @@
 
     var back = e.target.closest('[data-back]');
     if (back) {
+      mode = 'ask';
       if (step < QUESTIONS.length) commitCurrent();
       step = +back.getAttribute('data-back');
       render();               /* going back is instant: a wait there reads as lag */
@@ -501,6 +547,7 @@
         var at = answers[q.id].indexOf(i);
         if (at >= 0) answers[q.id].splice(at, 1); else answers[q.id].push(i);
         picked = null;              /* answers changed: re-recommend */
+        mode = 'ask'; shape = {}; shapeIdx = 0;
         /* toggle in place: re-rendering the whole flow on every checkbox makes the
            page jump and throws away the node that was just clicked */
         pick.classList.toggle('on', at < 0);
@@ -508,6 +555,7 @@
       } else {
         answers[q.id] = i;
         picked = null;              /* answers changed: re-recommend */
+        mode = 'ask'; shape = {}; shapeIdx = 0;
         advance();                  /* single choice moves on by itself */
       }
       return;
@@ -524,9 +572,39 @@
     }
 
     if (e.target.id === 'gqBuild') {
-      handOff();
+      startShaping();
       return;
     }
+
+    /* ---- shaping stage controls ---- */
+    var sEdit = e.target.closest('[data-stageedit]');
+    if (sEdit) { shape._editing = sEdit.getAttribute('data-stageedit'); render(); return; }
+
+    var sPick = e.target.closest('[data-stagepick]');
+    if (sPick) {
+      var stg = activeStages()[shapeIdx];
+      if (stg) stg.commit(sPick.getAttribute('data-stagepick'));
+      advanceStage();
+      return;
+    }
+
+    var sGo = e.target.closest('[data-stagego]');
+    if (sGo) { commitStage(); shape._editing = null; shapeIdx = +sGo.getAttribute('data-stagego'); render(); return; }
+
+    if (e.target.closest('[data-stageback]')) { stageBack(); return; }
+    if (e.target.id === 'stageNext') { advanceStage(); return; }
+  }
+
+  /* Knowing which documents you need is half the job. Keep the conversation going
+     and shape what goes inside them. */
+  function startShaping() {
+    if (!pickedCount()) return;
+    shape.name = ($('gqName') && $('gqName').value.trim()) || suggestName() || 'Untitled initiative';
+    shape.owner = ($('gqOwner') && $('gqOwner').value.trim()) || '';
+    if (!activeStages().length) { finish(); return; }
+    mode = 'shape';
+    shapeIdx = 0;
+    think(SHAPE_MSGS, THINK.step, render);
   }
 
   /* ticking a document on the results screen: update in place so the page does
@@ -545,25 +623,240 @@
     if (btn) { btn.textContent = buildLabel(); btn.disabled = pickedCount() === 0; }
   }
 
-  function handOff() {
+  function finish() {
     if (!pickedCount()) return;
-    var name = ($('gqName') && $('gqName').value.trim()) || suggestName() || 'Untitled initiative';
-    var owner = ($('gqOwner') && $('gqOwner').value.trim()) || '';
     var chosen = SIK.templates.DOCS.filter(function (d) { return picked[d.id]; })
       .map(function (d) { return d.id; });
-    /* name and owner are read before the pause: showing the spinner replaces the
-       results card, so those inputs are gone by the time the callback runs */
+    /* name and owner were captured when shaping started: the spinner replaces the
+       results card, so those inputs are long gone by the time this runs */
     think(HANDOFF_MSGS, THINK.handoff, function () {
       SIK.applyGuide({
         goal: String(answers.goal || '').trim(),
-        project: name,
-        owner: owner,
+        project: shape.name || suggestName() || 'Untitled initiative',
+        owner: shape.owner || '',
         signoff: String(answers.signoff || '').trim(),
         preset: presetFor(),
         horizon: horizonFor(),
-        docs: chosen
+        docs: chosen,
+        /* everything settled during the shaping conversation */
+        phaseNames: shape.phaseNames || null,
+        team: shape.team || null,
+        inScope: shape.inScope || null,
+        outScope: shape.outScope || null,
+        worries: shape.worries || null,
+        cadence: shape.cadence || ''
       });
     });
+  }
+
+  /* ---------- stage two: shaping the documents ----------
+     Each stage declares which documents make it relevant, so someone who only
+     wanted a decision log is never asked about scope. Types:
+       proposal  we suggest a structure, they accept it or edit it
+       lines     one item per line
+       pair      two line lists side by side
+       single    pick one */
+  function proposedPhaseNames() {
+    if (shape.phaseNames && shape.phaseNames.length) return shape.phaseNames.slice();
+    var preset = SIK.templates.PRESETS[presetFor()];
+    return preset.phases.map(function (p) { return p.name; });
+  }
+
+  /* run the real scheduler, so the dates we propose are the dates they will get */
+  function proposalSchedule(names) {
+    return P.buildSchedule({
+      startDate: startDate(),
+      horizonDays: horizonFor(),
+      phases: names.map(function (n) {
+        return { name: n, weight: 1, tasks: [{ name: 'placeholder' }] };
+      })
+    });
+  }
+
+  function everyPhrase(days) {
+    if (days <= 10) return 'about every ' + days + ' days';
+    var wk = Math.round(days / 7);
+    return 'roughly every ' + wk + (wk === 1 ? ' week' : ' weeks');
+  }
+
+  function splitLines(t) {
+    return String(t || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  }
+
+  var STAGES = [
+    {
+      id: 'phases', needs: ['plan', 'gantt'], type: 'proposal',
+      title: 'Does this shape look right?',
+      propose: function () {
+        var names = proposedPhaseNames();
+        var sched = proposalSchedule(names);
+        var days = horizonFor();
+        var avg = Math.max(1, Math.round(days / names.length));
+        var lead = 'You said ' + horizonLabel() +
+          (kindLabel() ? ', ' + kindLabel() : '') + '. Over those ' + days +
+          ' days I propose ' + names.length + ' stages of about ' + avg +
+          ' days each, each ending in a milestone, so something lands ' +
+          everyPhrase(avg) + '.';
+        var rows = sched.phases.map(function (ph) {
+          return '<li><b>' + R.esc(ph.name) + '</b><span>' +
+            P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end) + '</span></li>';
+        }).join('');
+        return { lead: lead, html: '<ol class="prop-list">' + rows + '</ol>' };
+      },
+      editLabel: 'I would change the stages',
+      editHelp: 'One stage per line, in order. Add, remove, or rename freely: the timeline redistributes across however many you leave.',
+      editValue: function () { return proposedPhaseNames().join('\n'); },
+      commit: function (text) {
+        var names = splitLines(text);
+        if (names.length) shape.phaseNames = names;
+      }
+    },
+    {
+      id: 'team', needs: ['raci', 'plan'], type: 'lines',
+      title: 'Who is involved?',
+      help: 'One name per line. These become the columns of your RACI and the owner dropdown in every spreadsheet. Initials are worked out for you.',
+      placeholder: 'Grace Hultquist\nSamson Wakoli',
+      value: function () {
+        if (shape.team) return shape.team.join('\n');
+        return shape.owner || '';
+      },
+      commit: function (text) { shape.team = splitLines(text); }
+    },
+    {
+      id: 'scope', needs: ['charter'], type: 'pair',
+      title: 'What is in, and what is deliberately out?',
+      help: 'The second box matters more than people expect: writing down what you are not doing is what stops the scope argument three months in. One item per line, or skip it.',
+      a: { label: 'In scope', placeholder: 'Review the existing evidence\nInterview 8 to 10 people\nWrite a recommendation' },
+      b: { label: 'Explicitly out of scope', placeholder: 'Running a pilot\nAnything past the go/no-go decision' },
+      value: function () { return [(shape.inScope || []).join('\n'), (shape.outScope || []).join('\n')]; },
+      commit: function (a, b) { shape.inScope = splitLines(a); shape.outScope = splitLines(b); }
+    },
+    {
+      id: 'worries', needs: ['risks'], type: 'lines',
+      title: 'What worries you most?',
+      help: 'One per line, in plain language. These go into your risk register above the generic ones, so it opens with the things you actually lose sleep over.',
+      placeholder: 'The partner may not have capacity in the second half\nApproval slips past October',
+      value: function () { return (shape.worries || []).join('\n'); },
+      commit: function (text) { shape.worries = splitLines(text); }
+    },
+    {
+      id: 'cadence', needs: ['status', 'onepager'], type: 'single',
+      title: 'How often will you update people?',
+      help: 'Sets the reporting period on your update template.',
+      options: ['Weekly', 'Fortnightly', 'Monthly', 'At milestones only'],
+      value: function () { return shape.cadence || ''; },
+      commit: function (v) { shape.cadence = v; }
+    }
+  ];
+
+  function activeStages() {
+    return STAGES.filter(function (st) {
+      return st.needs.some(function (d) { return picked && picked[d]; });
+    });
+  }
+
+  function renderStage() {
+    var stages = activeStages();
+    var st = stages[shapeIdx];
+    if (!st) return '';
+    var last = shapeIdx === stages.length - 1;
+    var editing = shape._editing === st.id;
+    var h = '<div class="gq gq-active gq-stage">' +
+      '<div class="gq-q">' + R.esc(st.title) + '</div>' +
+      (st.help ? '<p class="gq-help">' + R.esc(st.help) + '</p>' : '');
+
+    if (st.type === 'proposal') {
+      var pr = st.propose();
+      h += '<p class="prop-lead">' + R.esc(pr.lead) + '</p>' + pr.html;
+      if (editing) {
+        h += '<label class="ff ff-tasks"><span>' + R.esc(st.editHelp) + '</span>' +
+          '<textarea id="stageA" rows="7">' + R.esc(st.editValue()) + '</textarea></label>';
+      } else {
+        h += '<p class="prop-ask">How does that sound?</p>';
+      }
+    } else if (st.type === 'lines') {
+      h += '<textarea id="stageA" rows="5" placeholder="' + R.esc(st.placeholder || '') + '">' +
+        R.esc(st.value()) + '</textarea>';
+    } else if (st.type === 'pair') {
+      var v = st.value();
+      h += '<div class="stage-pair">' +
+        '<label class="ff"><span>' + R.esc(st.a.label) + '</span>' +
+          '<textarea id="stageA" rows="5" placeholder="' + R.esc(st.a.placeholder) + '">' + R.esc(v[0]) + '</textarea></label>' +
+        '<label class="ff"><span>' + R.esc(st.b.label) + '</span>' +
+          '<textarea id="stageB" rows="5" placeholder="' + R.esc(st.b.placeholder) + '">' + R.esc(v[1]) + '</textarea></label>' +
+      '</div>';
+    } else if (st.type === 'single') {
+      var cur = st.value();
+      h += '<div class="gq-opts">' + st.options.map(function (o) {
+        return '<button type="button" class="gq-opt' + (cur === o ? ' on' : '') +
+          '" data-stagepick="' + R.esc(o) + '"><span class="gq-opt-label">' + R.esc(o) + '</span></button>';
+      }).join('') + '</div>';
+    }
+
+    var nextLabel = last ? buildLabel() : 'Continue';
+    h += '<div class="gq-nav">' +
+      '<button type="button" class="btn-ghost btn-ghost-inline" data-stageback="1">Back</button>' +
+      '<span class="stage-actions">' +
+        (st.type === 'proposal' && !editing
+          ? '<button type="button" class="btn-ghost btn-ghost-inline" data-stageedit="' + st.id + '">' +
+              R.esc(st.editLabel) + '</button>'
+          : '') +
+        '<button type="button" class="btn-primary" id="stageNext">' +
+          (st.type === 'proposal' && !editing && !last ? 'Sounds right' : nextLabel) +
+        '</button>' +
+      '</span>' +
+    '</div>';
+    return h + '</div>';
+  }
+
+  function commitStage() {
+    var st = activeStages()[shapeIdx];
+    if (!st) return;
+    if (st.type === 'pair') {
+      st.commit($('stageA') && $('stageA').value, $('stageB') && $('stageB').value);
+    } else if (st.type === 'lines' || (st.type === 'proposal' && shape._editing === st.id)) {
+      st.commit($('stageA') && $('stageA').value);
+    }
+  }
+
+  function advanceStage() {
+    commitStage();
+    shape._editing = null;
+    var stages = activeStages();
+    if (shapeIdx >= stages.length - 1) { finish(); return; }
+    shapeIdx++;
+    think(STEP_MSGS, THINK.step, render);
+  }
+
+  function stageBack() {
+    if (shape._editing) { shape._editing = null; render(); return; }
+    commitStage();
+    if (shapeIdx === 0) { mode = 'result'; render(); return; }
+    shapeIdx--;
+    render();
+  }
+
+  /* the shaping transcript: what has been settled so far, above the live stage */
+  function renderStageDone() {
+    var stages = activeStages();
+    var out = '';
+    for (var i = 0; i < shapeIdx && i < stages.length; i++) {
+      var st = stages[i];
+      var summary = '';
+      if (st.id === 'phases') summary = proposedPhaseNames().join(' → ');
+      else if (st.id === 'team') summary = (shape.team || []).join(', ') || 'Nobody named yet';
+      else if (st.id === 'scope') {
+        summary = ((shape.inScope || []).length ? (shape.inScope || []).length + ' in scope' : 'nothing in scope yet') +
+          ', ' + ((shape.outScope || []).length ? (shape.outScope || []).length + ' explicitly out' : 'nothing ruled out');
+      } else if (st.id === 'worries') summary = (shape.worries || []).join('; ') || 'Skipped';
+      else if (st.id === 'cadence') summary = shape.cadence || 'Skipped';
+      out += '<div class="gq gq-done">' +
+        '<div class="gq-q">' + R.esc(st.title) +
+          '<button type="button" class="btn-link gq-change" data-stagego="' + i + '">Change</button></div>' +
+        '<div class="gq-a">' + R.esc(summary) + '</div>' +
+      '</div>';
+    }
+    return out;
   }
 
   function init() {
@@ -584,7 +877,9 @@
     });
     $('guideRestart').addEventListener('click', function () {
       clearThink();
-      answers = {}; step = 0; picked = null; render();
+      answers = {}; step = 0; picked = null;
+      mode = 'ask'; shapeIdx = 0; shape = {};
+      render();
     });
     render();
   }

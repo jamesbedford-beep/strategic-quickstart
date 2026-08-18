@@ -226,7 +226,10 @@
   /* ===================== risk register ===================== */
   function risks(cfg, sched) {
     var preset = T.PRESETS[cfg.preset] || T.PRESETS['strategic-initiative'];
-    var seed = (preset.risks || []).concat(T.GENERIC_RISKS);
+    /* Whatever they told us worries them goes at the top, uncategorized: it is
+       theirs, and a register that opens with the real concern gets used. */
+    var mine = (cfg.worries || []).map(function (w) { return [w, '']; });
+    var seed = mine.concat(preset.risks || [], T.GENERIC_RISKS);
 
     var head = ['ID', 'Risk: what could go wrong', 'Category', 'Likelihood 1-5', 'Impact 1-5',
       'Score', 'Mitigation or action already agreed', 'Owner', 'Status', 'Review by'];
@@ -458,9 +461,11 @@
         : null,
 
       { h2: 'In scope' },
-      { ul: ['[thing we will do]', '[thing we will do]', '[thing we will do]'] },
+      { ul: (cfg.inScope && cfg.inScope.length) ? cfg.inScope
+        : ['[thing we will do]', '[thing we will do]', '[thing we will do]'] },
       { h3: 'Explicitly out of scope' },
-      { ul: ['[thing people will assume we are doing but we are not]', '[thing deferred to a later phase]'] },
+      { ul: (cfg.outScope && cfg.outScope.length) ? cfg.outScope
+        : ['[thing people will assume we are doing but we are not]', '[thing deferred to a later phase]'] },
 
       { h2: 'Success metrics' },
       { table: { head: ['Metric', 'Baseline', 'Target', 'By when', 'How it is measured'],
@@ -488,6 +493,9 @@
       { table: { head: ['Risk', 'Mitigation', 'Owner'], rows: seedRisks } },
       { p: 'Full register, with likelihood and impact scoring, is in the risk register.' },
 
+      cfg.cadence ? { h2: 'Reporting' } : null,
+      cfg.cadence ? { p: 'Updates go out ' + cfg.cadence.toLowerCase() + '.' } : null,
+
       { h2: 'Open questions' },
       { ul: ['[question that could change the plan, and who will answer it by when]',
         '[assumption we have not tested]'] },
@@ -507,7 +515,9 @@
     return [
       { h1: cfg.project + ': status update' },
       { meta: [
-        ['Period', '[week ending ' + P.iso(P.today()) + ']'],
+        ['Period', cfg.cadence
+          ? cfg.cadence + ', to ' + P.iso(P.today())
+          : '[week ending ' + P.iso(P.today()) + ']'],
         ['Owner', cfg.dri || '[name]'],
         ['Overall status', '[Green / Amber / Red]']
       ] },

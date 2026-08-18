@@ -8,12 +8,6 @@
 
   var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-  /* Backing store for the Team notes tab. GitHub issues are used because they are
-     shared by construction: one list everyone sees, a thread per note, no server
-     to run and no key to leak. Reading is unauthenticated. */
-  var REPO = (SIK.notesConfig && SIK.notesConfig.repo) || 'jamesbedford-beep/strategic-quickstart';
-  var REPO_URL = 'https://github.com/' + REPO;
-
   /* ---------------- state ---------------- */
   function presetPhases(id) {
     var p = T.PRESETS[id] || T.PRESETS['strategic-initiative'];
@@ -23,6 +17,25 @@
         tasks: ph.tasks.map(function (t) {
           return t.charAt(0) === '*' ? '* ' + t.slice(1).trim() : t;
         }).join('\n')
+      };
+    });
+  }
+
+
+  /* Build the phase list, honouring the stage names agreed during shaping. Preset
+     task lists are kept positionally, so renaming a stage keeps its tasks; stages
+     beyond the preset get a neutral placeholder rather than tasks borrowed from an
+     unrelated phase. */
+  function phasesFor(presetId, names) {
+    var base = presetPhases(presetId);
+    if (!names || !names.length) return base;
+    return names.map(function (n, i) {
+      var from = base[i];
+      return {
+        name: n,
+        weight: from ? from.weight : 20,
+        owner: '',
+        tasks: from ? from.tasks : ('First task\n* ' + n + ' complete')
       };
     });
   }
@@ -42,6 +55,7 @@
       start: nextMonday(),
       horizon: 91, days: 91, gran: 'auto',
       goal: '', signoff: '',
+      inScope: [], outScope: [], worries: [], cadence: '',
       team: [{ name: '', initials: '', role: '' }],
       phases: presetPhases('strategic-initiative'),
       docs: ['plan', 'gantt', 'raci', 'charter', 'risks', 'status'],
@@ -95,16 +109,14 @@
     } catch (e) { return null; }
   }
 
-  var returning = false;   /* has this browser used the builder before? */
-
   function load() {
     var fromHash = location.hash.indexOf('#s=') === 0 && decodeState(location.hash.slice(3));
-    if (fromHash) { state = Object.assign(defaults(), fromHash); returning = true; return; }
+    if (fromHash) { state = Object.assign(defaults(), fromHash); return; }
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.phases && o.docs) { state = Object.assign(defaults(), o); returning = true; }
+        if (o && o.phases && o.docs) state = Object.assign(defaults(), o);
       }
     } catch (e) { /* private mode or disabled storage: run on defaults */ }
   }
@@ -135,6 +147,10 @@
       sponsor: (state.sponsor || '').trim(),
       goal: (state.goal || '').trim(),
       signoff: (state.signoff || '').trim(),
+      inScope: state.inScope || [],
+      outScope: state.outScope || [],
+      worries: state.worries || [],
+      cadence: state.cadence || '',
       startDate: state.start,
       horizonDays: horizonDays(),
       granularity: state.gran,
@@ -511,228 +527,25 @@
     toast(all.length + ' files exported');
   }
 
-  /* ---------------- team notes ----------------
-     Two backends. If a Google Form and a published response sheet are configured
-     in notes-config.js, anyone can post without logging into anything, and notes
-     render natively from the sheet CSV. Until then it falls back to the repo's
-     GitHub issues, which works today but needs an account to post. */
-  var NC = SIK.notesConfig || {};
-  var notesMode = (NC.formUrl && NC.csvUrl) ? 'form' : 'github';
-  var notesLoaded = false;
 
-  function relTime(iso) {
-    var then = new Date(iso), now = new Date();
-    var mins = Math.round((now - then) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
-    var h = Math.round(mins / 60);
-    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
-    var d = Math.round(h / 24);
-    if (d < 31) return d + (d === 1 ? ' day ago' : ' days ago');
-    return then.toISOString().slice(0, 10);
-  }
-
-  function notesMessage(html) { $('notesList').innerHTML = '<div class="notes-msg">' + html + '</div>'; }
-
-  /* RFC4180-ish CSV parse: quoted fields, escaped quotes, newlines inside quotes */
-  function parseCsv(text) {
-    var rows = [], row = [], field = '', inQ = false, i = 0;
-    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    for (; i < text.length; i++) {
-      var ch = text.charAt(i);
-      if (inQ) {
-        if (ch === '"') {
-          if (text.charAt(i + 1) === '"') { field += '"'; i++; }
-          else inQ = false;
-        } else field += ch;
-      } else if (ch === '"') inQ = true;
-      else if (ch === ',') { row.push(field); field = ''; }
-      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-      else field += ch;
-    }
-    if (field !== '' || row.length) { row.push(field); rows.push(row); }
-    return rows.filter(function (r) { return r.some(function (c) { return c.trim(); }); });
-  }
-
-  /* Render whatever columns the form happens to have. The first column of a Forms
-     response sheet is the timestamp; the next non-empty one reads as the title and
-     the rest become labeled lines. That way the sheet's questions can change
-     without touching this code. */
-  function renderFormNotes(rows) {
-    var head = rows[0].map(function (h) { return h.trim(); });
-    var body = rows.slice(1);
-    if (!body.length) {
-      notesMessage('No notes yet. <b>Add a note</b> above to start the list: ' +
-        'an idea, a rough edge, or something that should work differently.');
-      return;
-    }
-    var tsIdx = 0;
-    var titleIdx = head.length > 1 ? 1 : 0;
-
-    /* newest first, by timestamp where it parses */
-    var idx = body.map(function (r, n) { return { r: r, n: n }; });
-    idx.sort(function (a, b) {
-      var da = Date.parse(a.r[tsIdx]), db = Date.parse(b.r[tsIdx]);
-      if (isNaN(da) && isNaN(db)) return b.n - a.n;
-      if (isNaN(da)) return 1;
-      if (isNaN(db)) return -1;
-      return db - da;
-    });
-
-    $('notesList').innerHTML = idx.map(function (o) {
-      var r = o.r;
-      var title = (r[titleIdx] || '').trim() || '(untitled note)';
-      var when = Date.parse(r[tsIdx]);
-      var rest = head.map(function (h, c) {
-        if (c === tsIdx || c === titleIdx) return '';
-        var v = (r[c] || '').trim();
-        if (!v) return '';
-        return '<div class="nt-field"><span class="nt-key">' + R.esc(h) + '</span>' +
-          R.esc(v) + '</div>';
-      }).join('');
-      return '<div class="nt nt-static">' +
-        '<div class="nt-top"><span class="nt-title">' + R.esc(title) + '</span></div>' +
-        '<div class="nt-meta">' + (isNaN(when) ? R.esc((r[tsIdx] || '').trim()) : relTime(new Date(when).toISOString())) + '</div>' +
-        (rest ? '<div class="nt-body">' + rest + '</div>' : '') +
-      '</div>';
-    }).join('');
-  }
-
-  function loadFormNotes() {
-    notesMessage('Loading notes…');
-    /* cache-bust so a note added a moment ago actually shows up on refresh */
-    var url = NC.csvUrl + (NC.csvUrl.indexOf('?') < 0 ? '?' : '&') + 'cb=' + Date.now();
-    fetch(url).then(function (res) {
-      if (!res.ok) throw new Error('http ' + res.status);
-      return res.text();
-    }).then(function (text) {
-      var rows = parseCsv(text);
-      if (!rows.length) {
-        notesMessage('The response sheet is reachable but empty. Add the first note above.');
-        return;
-      }
-      renderFormNotes(rows);
-    }).catch(function () {
-      notesMessage('Could not load the notes just now. You may be offline. ' +
-        'Adding a note with the button above still works.');
-    });
-  }
-
-  function loadNotes(force) {
-    if (notesLoaded && !force) return;
-    notesLoaded = true;
-    if (notesMode === 'form') { loadFormNotes(); return; }
-    loadGithubNotes();
-  }
-
-  function loadGithubNotes() {
-    notesMessage('Loading notes from GitHub…');
-
-    fetch('https://api.github.com/repos/' + REPO + '/issues?state=all&sort=updated&per_page=50', {
-      headers: { Accept: 'application/vnd.github+json' }
-    }).then(function (res) {
-      if (res.status === 403) throw new Error('rate');
-      if (!res.ok) throw new Error('http ' + res.status);
-      return res.json();
-    }).then(function (items) {
-      /* the issues endpoint also returns pull requests; drop them */
-      var notes = items.filter(function (i) { return !i.pull_request; });
-      if (!notes.length) {
-        notesMessage('No notes yet. <b>Add a note</b> above to start the list: ' +
-          'an idea, a rough edge, or something that should work differently.');
-        return;
-      }
-      $('notesList').innerHTML = notes.map(function (n) {
-        var labels = (n.labels || []).map(function (l) {
-          return '<span class="nt-label">' + R.esc(l.name) + '</span>';
-        }).join('');
-        var up = n.reactions && n.reactions['+1'];
-        return '<a class="nt" href="' + R.esc(n.html_url) + '" target="_blank" rel="noopener">' +
-          '<div class="nt-top">' +
-            '<span class="nt-state nt-' + (n.state === 'open' ? 'open' : 'closed') + '">' +
-              (n.state === 'open' ? 'Open' : 'Done') + '</span>' +
-            '<span class="nt-title">' + R.esc(n.title) + '</span>' +
-          '</div>' +
-          '<div class="nt-meta">' +
-            '#' + n.number + ' &middot; ' + R.esc((n.user && n.user.login) || 'someone') +
-            ' &middot; ' + relTime(n.updated_at) +
-            (n.comments ? ' &middot; ' + n.comments + (n.comments === 1 ? ' comment' : ' comments') : '') +
-            (up ? ' &middot; ' + up + ' &#128077;' : '') +
-            labels +
-          '</div>' +
-        '</a>';
-      }).join('');
-    }).catch(function (err) {
-      var msg = err && err.message === 'rate'
-        ? 'GitHub is rate limiting anonymous requests from this network. Wait a few minutes, ' +
-          'or open the board directly.'
-        : 'Could not reach GitHub. You may be offline, in which case the Build tab still ' +
-          'works normally.';
-      notesMessage(msg + ' <a href="' + REPO_URL + '/issues" target="_blank" rel="noopener">' +
-        'Open the board on GitHub</a>.');
-    });
-  }
-
-  /* embed the form on first click rather than on page load, so the notes tab does
-     not pull a Google iframe for people who only came to read */
-  function toggleCompose() {
-    var wrap = $('composeWrap');
-    if (notesMode !== 'form') { window.open(githubNewNoteUrl(), '_blank', 'noopener'); return; }
-    if (!wrap.innerHTML) {
-      var src = NC.formUrl + (NC.formUrl.indexOf('?') < 0 ? '?' : '&') + 'embedded=true';
-      wrap.innerHTML = '<iframe src="' + R.esc(src) + '" loading="lazy" ' +
-        'title="Add a note"></iframe>' +
-        '<p class="compose-foot">Submitted a note? <button type="button" class="btn-link" ' +
-        'id="composeDone">Refresh the list</button>. It can take a few seconds to appear.</p>';
-      wrap.querySelector('#composeDone').addEventListener('click', function () {
-        loadNotes(true);
-      });
-    }
-    wrap.hidden = !wrap.hidden;
-    $('composeBtn').textContent = wrap.hidden ? 'Add a note' : 'Hide the form';
-  }
-
-  function githubNewNoteUrl() {
-    return REPO_URL + '/issues/new?labels=idea&body=' + encodeURIComponent(
-      '**What is awkward or missing today**\n\n\n' +
-      '**What you would like instead**\n\n\n' +
-      '**Which document or step it affects**\n\n\n' +
-      '**How much it matters (nice to have / would save real time / blocking)**\n\n');
-  }
-
-  function initNotesTab() {
-    var caveat = $('notesCaveat'), all = $('allNotesBtn');
-    if (notesMode === 'form') {
-      caveat.textContent = 'Adding a note needs no account and no sign-in. This tab is the ' +
-        'one part of the site that talks to the network, and only when you open it. ' +
-        'Everything on the Build tab still runs entirely offline.';
-      all.href = NC.formUrl;
-      all.hidden = false;
-    } else {
-      caveat.textContent = 'Reading needs nothing. Posting currently needs a GitHub account, ' +
-        'which is what attributes a note to you. The Build tab never touches the network.';
-      all.href = REPO_URL + '/issues';
-      all.textContent = 'Open the board on GitHub';
-      all.hidden = false;
-    }
-  }
-
+  /* Two panes: the guided Start here flow, and the Custom build form. */
   function showTab(name) {
-    var panes = { guide: 'guidePane', build: 'buildPane', notes: 'notesPane' };
-    if (!panes[name]) name = 'build';
+    var panes = { guide: 'guidePane', build: 'buildPane' };
+    if (!panes[name]) name = 'guide';
     Object.keys(panes).forEach(function (k) { $(panes[k]).hidden = k !== name; });
-    $('hero').hidden = name === 'notes';
     $('topbarActions').hidden = name !== 'build';   /* Export only means something on Build */
     var tabs = $('tabs').querySelectorAll('.tab');
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].classList.toggle('on', tabs[i].getAttribute('data-tab') === name);
     }
-    if (name === 'notes') loadNotes(false);
+    /* keep the hash in step so #build is bookmarkable, without clobbering a
+       shared-setup link */
+    if (location.hash.indexOf('#s=') !== 0 && location.hash !== '#' + name) {
+      history.replaceState(null, '', '#' + name);
+    }
   }
   SIK.showTab = showTab;
 
-  /* Called by the Start here wizard once someone has answered its questions.
-     It only sets up the form; nothing is generated until they hit Export. */
   SIK.applyGuide = function (res) {
     state.goal = res.goal || '';
     state.project = res.project || state.project;
@@ -746,12 +559,22 @@
       state.sponsor = res.signoff.trim();
     }
     state.preset = res.preset;
-    state.phases = presetPhases(res.preset);
+    state.phases = phasesFor(res.preset, res.phaseNames);
+    state.inScope = res.inScope || [];
+    state.outScope = res.outScope || [];
+    state.worries = res.worries || [];
+    state.cadence = res.cadence || '';
     state.horizon = res.horizon;
     state.days = res.horizon;
     if (res.docs && res.docs.length) state.docs = res.docs.slice();
-    /* seed the team with the owner so the RACI has a column to work with */
-    if (res.owner && !(state.team || []).some(function (m) { return (m.name || '').trim(); })) {
+    /* names given during shaping win; otherwise seed with the owner so the RACI
+       has at least one column to work with */
+    if (res.team && res.team.length) {
+      state.team = res.team.map(function (n) {
+        var known = BY_NAME[n.toLowerCase()];
+        return { name: n, initials: initialsOf(n), role: (known && known.t) || '' };
+      });
+    } else if (res.owner && !(state.team || []).some(function (m) { return (m.name || '').trim(); })) {
       state.team = [{ name: res.owner, initials: initialsOf(res.owner), role: '' }];
     }
     syncForm();
@@ -953,20 +776,10 @@
       copyText(text, item.doc.name + ' copied' + (item.sheet ? ' as CSV' : ' as Markdown'));
     });
 
-    /* Tabs and the shared notes board. Wrapped because this runs last: if a
-       browser ever pairs this script with different HTML, a missing element here
-       must not take the document builder down with it. */
-    try {
-      $('tabs').addEventListener('click', function (e) {
-        var t = e.target.closest('.tab');
-        if (t) showTab(t.getAttribute('data-tab'));
-      });
-      $('notesRefresh').addEventListener('click', function () { loadNotes(true); });
-      $('composeBtn').addEventListener('click', toggleCompose);
-      initNotesTab();
-    } catch (e) {
-      if (window.console) console.warn('Team notes tab unavailable:', e && e.message);
-    }
+    $('tabs').addEventListener('click', function (e) {
+      var t = e.target.closest('.tab');
+      if (t) showTab(t.getAttribute('data-tab'));
+    });
 
     /* "skip to the builder" inside the wizard */
     document.addEventListener('click', function (e) {
@@ -974,9 +787,11 @@
       if (g) showTab(g.getAttribute('data-goto'));
     });
 
-    /* First-time visitors land on the wizard, which is the whole point of it.
-       Anyone who has used the builder before goes straight back to their work. */
-    showTab(returning ? 'build' : 'guide');
+    /* Start here is the homepage. Everyone lands there, including returning
+       visitors, since the guided route is the one we want people taking. The
+       Custom build tab is always available, and #build deep-links straight to it
+       for anyone who wants to bookmark the builder. */
+    showTab(location.hash === '#build' ? 'build' : 'guide');
 
     $('linkBtn').addEventListener('click', function () {
       var url = location.origin + location.pathname + '#s=' + encodeState(state);
