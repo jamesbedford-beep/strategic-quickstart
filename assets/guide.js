@@ -126,7 +126,7 @@
      Tune here: `step` is between questions, `result` is before the
      recommendations, `handoff` is while the builder is being filled in. Set any of
      them to 0 to remove that pause entirely. */
-  var THINK = { step: 1200, result: 3600, handoff: 1600 };
+  var THINK = { step: 2000, result: 5000, handoff: 2400 };
 
   /* Every line below is a true description of what the code is doing at that
      moment: reading the answers, scoring the documents, building the schedule,
@@ -145,6 +145,7 @@
   var step = 0;
   var thinking = null;       /* {msgs, total} while a pause is running */
   var thinkTimers = [];
+  var thinkTick = null;
   /* null means "follow the recommendation". Once someone ticks or unticks
      anything it becomes their explicit set, and any change to an answer resets it
      so a fresh recommendation is not silently overridden by stale choices. */
@@ -320,16 +321,27 @@
   }
 
   /* ---------- the considered pause ---------- */
+  var ORBIT = '<span class="orbit" aria-hidden="true">' +
+    '<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>';
+
+  /* 20.1s under a minute, 1m 6.2s over it */
+  function elapsedText(ms) {
+    var sec = ms / 1000;
+    if (sec < 60) return sec.toFixed(1) + 's';
+    return Math.floor(sec / 60) + 'm ' + (sec % 60).toFixed(1) + 's';
+  }
+
   function renderThinking() {
-    return '<div class="gq-think" role="status" aria-live="polite">' +
-      '<span class="spinner" aria-hidden="true"></span>' +
-      '<span class="gq-think-msg" id="thinkMsg">' + R.esc(thinking.msgs[0]) + '</span>' +
+    return '<div class="gq-think" role="status" aria-live="polite">' + ORBIT +
+      '<span class="think-label" id="thinkMsg">' + R.esc(thinking.msgs[0]) + '</span>' +
+      '<span class="think-time" id="thinkTime">0.0s</span>' +
     '</div>';
   }
 
   function clearThink() {
     thinkTimers.forEach(clearTimeout);
     thinkTimers = [];
+    if (thinkTick) { clearInterval(thinkTick); thinkTick = null; }
     thinking = null;
   }
 
@@ -341,8 +353,16 @@
        timer and nothing to re-render it. */
     if (thinking) clearThink();
     if (!total) { done(); return; }        /* pause turned off in THINK */
+    var began = Date.now();
     thinking = { msgs: msgs };
     render();
+
+    /* the elapsed counter is the honest part of the wait: it shows exactly how
+       long we have been holding things up */
+    thinkTick = setInterval(function () {
+      var el = $('thinkTime');
+      if (el) el.textContent = elapsedText(Date.now() - began);
+    }, 100);
 
     msgs.forEach(function (m, i) {
       if (i === 0) return;
@@ -367,33 +387,50 @@
       render);
   }
 
+  /* Choice questions render as an approval card: the question is the card's
+     header and each option is a selectable row. Free-text questions cannot be
+     asked that way, so they keep a textarea inside the same card. */
+  function optionRows(options, isMulti, chosen, attr) {
+    return '<div class="ac-opts' + (isMulti ? ' many' : '') + '">' +
+      options.map(function (o, i) {
+        var label = typeof o === 'string' ? o : o.label;
+        var sub = typeof o === 'string' ? '' : o.sub;
+        var on = isMulti ? (chosen || []).indexOf(i) >= 0 : chosen === i;
+        return '<button type="button" class="ac-opt' + (on ? ' on' : '') + '"' +
+          ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+          ' ' + attr + '="' + i + '">' +
+          '<span class="ac-mark"><i></i></span>' +
+          '<span class="ac-label">' + R.esc(label) +
+            (sub ? '<span class="ac-sub">' + R.esc(sub) + '</span>' : '') +
+          '</span></button>';
+      }).join('') + '</div>';
+  }
+
   function renderQuestion(q) {
     var a = answers[q.id];
-    var h = '<div class="gq gq-active">' +
-      '<div class="gq-q">' + R.esc(q.q) + '</div>' +
-      (q.help ? '<p class="gq-help">' + R.esc(q.help) + '</p>' : '');
+    var h = '<div class="gq gq-active ac">' +
+      '<p class="ac-q">' + R.esc(q.q) + '</p>' +
+      (q.help ? '<p class="ac-help">' + R.esc(q.help) + '</p>' : '');
 
     if (q.type === 'text') {
       h += '<textarea id="gqText" rows="' + (q.rows || 2) + '" placeholder="' +
         R.esc(q.placeholder || '') + '">' + R.esc(a || '') + '</textarea>';
     } else {
-      h += '<div class="gq-opts">' + q.options.map(function (o, i) {
-        var on = q.type === 'multi'
-          ? (a || []).indexOf(i) >= 0
-          : a === i;
-        return '<button type="button" class="gq-opt' + (on ? ' on' : '') +
-          '" data-pick="' + i + '">' +
-          '<span class="gq-opt-label">' + R.esc(o.label) + '</span>' +
-          (o.sub ? '<span class="gq-opt-sub">' + R.esc(o.sub) + '</span>' : '') +
-          '</button>';
-      }).join('') + '</div>';
+      h += optionRows(q.options, q.type === 'multi', a, 'data-pick');
     }
 
-    h += '<div class="gq-nav">' +
-      (step > 0 ? '<button type="button" class="btn-ghost btn-ghost-inline" data-back="' + (step - 1) + '">Back</button>' : '<span></span>') +
-      '<button type="button" class="btn-primary" id="gqNext">' +
-        (q.type === 'multi' || q.optional || q.type === 'text' ? 'Continue' : 'Continue') +
-      '</button>' +
+    var picks = q.type === 'multi' ? (a || []).length : 0;
+    h += '<div class="ac-foot">' +
+      (step > 0
+        ? '<button type="button" class="btn-ghost btn-ghost-inline" data-back="' + (step - 1) + '">Back</button>'
+        : '<span></span>') +
+      '<span class="stage-actions">' +
+        (q.type === 'multi'
+          ? '<span class="ac-count" id="acCount">' +
+              (picks ? picks + ' selected' : 'Pick any that apply') + '</span>'
+          : '') +
+        '<button type="button" class="btn-primary" id="gqNext">Continue</button>' +
+      '</span>' +
     '</div>';
     return h + '</div>';
   }
@@ -548,10 +585,15 @@
         if (at >= 0) answers[q.id].splice(at, 1); else answers[q.id].push(i);
         picked = null;              /* answers changed: re-recommend */
         mode = 'ask'; shape = {}; shapeIdx = 0;
-        /* toggle in place: re-rendering the whole flow on every checkbox makes the
+        /* toggle in place: re-rendering the whole flow on every choice makes the
            page jump and throws away the node that was just clicked */
         pick.classList.toggle('on', at < 0);
         pick.setAttribute('aria-pressed', at < 0 ? 'true' : 'false');
+        var cnt = $('acCount');
+        if (cnt) {
+          var n = answers[q.id].length;
+          cnt.textContent = n ? n + ' selected' : 'Pick any that apply';
+        }
       } else {
         answers[q.id] = i;
         picked = null;              /* answers changed: re-recommend */
@@ -583,7 +625,7 @@
     var sPick = e.target.closest('[data-stagepick]');
     if (sPick) {
       var stg = activeStages()[shapeIdx];
-      if (stg) stg.commit(sPick.getAttribute('data-stagepick'));
+      if (stg) stg.commit(stg.options[+sPick.getAttribute('data-stagepick')]);
       advanceStage();
       return;
     }
@@ -761,9 +803,9 @@
     if (!st) return '';
     var last = shapeIdx === stages.length - 1;
     var editing = shape._editing === st.id;
-    var h = '<div class="gq gq-active gq-stage">' +
-      '<div class="gq-q">' + R.esc(st.title) + '</div>' +
-      (st.help ? '<p class="gq-help">' + R.esc(st.help) + '</p>' : '');
+    var h = '<div class="gq gq-active gq-stage ac">' +
+      '<p class="ac-q">' + R.esc(st.title) + '</p>' +
+      (st.help ? '<p class="ac-help">' + R.esc(st.help) + '</p>' : '');
 
     if (st.type === 'proposal') {
       var pr = st.propose();
@@ -786,15 +828,12 @@
           '<textarea id="stageB" rows="5" placeholder="' + R.esc(st.b.placeholder) + '">' + R.esc(v[1]) + '</textarea></label>' +
       '</div>';
     } else if (st.type === 'single') {
-      var cur = st.value();
-      h += '<div class="gq-opts">' + st.options.map(function (o) {
-        return '<button type="button" class="gq-opt' + (cur === o ? ' on' : '') +
-          '" data-stagepick="' + R.esc(o) + '"><span class="gq-opt-label">' + R.esc(o) + '</span></button>';
-      }).join('') + '</div>';
+      var cur = st.options.indexOf(st.value());
+      h += optionRows(st.options, false, cur, 'data-stagepick');
     }
 
     var nextLabel = last ? buildLabel() : 'Continue';
-    h += '<div class="gq-nav">' +
+    h += '<div class="ac-foot">' +
       '<button type="button" class="btn-ghost btn-ghost-inline" data-stageback="1">Back</button>' +
       '<span class="stage-actions">' +
         (st.type === 'proposal' && !editing

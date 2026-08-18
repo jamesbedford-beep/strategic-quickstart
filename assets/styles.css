@@ -318,17 +318,6 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 }
 .gq-active textarea.needs { border-color: var(--red); box-shadow: 0 0 0 3px #fbe7e7; }
 
-.gq-opts { display: flex; flex-direction: column; gap: 7px; }
-.gq-opt {
-  font-family: var(--font); text-align: left; cursor: pointer;
-  background: var(--surface); border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm); padding: 10px 13px;
-}
-.gq-opt:hover { border-color: var(--accent); background: #fcfdff; }
-.gq-opt.on { border-color: var(--accent); background: var(--accent-weak); }
-.gq-opt-label { display: block; font-size: 13.5px; font-weight: 600; color: var(--text); }
-.gq-opt-sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
 .gq-nav {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin-top: 14px;
@@ -341,24 +330,6 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm); padding: 18px 20px; margin: 16px 0 0;
   min-height: 62px;
-}
-.gq-think-msg {
-  font-size: 14px; color: #414b57;
-  animation: fadeIn .35s ease;
-}
-.spinner {
-  flex: none; width: 18px; height: 18px; border-radius: 50%;
-  border: 2px solid var(--accent-weak); border-top-color: var(--accent);
-  animation: spin .7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-/* honour the OS setting: hold the position, drop the motion */
-@media (prefers-reduced-motion: reduce) {
-  .spinner { animation: none; border-top-color: var(--accent-weak); background: var(--accent-weak); }
-  .gq-think-msg { animation: none; }
-  .prog-fill { transition: none; }
 }
 
 /* recommendation */
@@ -491,3 +462,117 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
   .stage-pair { grid-template-columns: 1fr; }
   .stage-actions { flex-wrap: wrap; }
 }
+
+/* ---------- Orbit loader ----------
+   Pattern adapted from the "Loading State / Orbit" primitive on
+   beautifului.dev: a 3x3 pixel grid where the lit cell travels clockwise
+   around the eight outer squares while the centre stays dim, next to a
+   shimmering label and a monospace elapsed timer. Rebuilt against this
+   project's own tokens for a light theme rather than copied. */
+.orbit {
+  display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px;
+  flex: none;
+}
+.orbit i {
+  width: 4px; height: 4px; border-radius: 1px;
+  background: var(--text); opacity: .15;
+  animation: pixel-on 950ms ease-in-out infinite;
+}
+/* clockwise from top-left; the centre cell never fires, which is what makes
+   the motion read as an orbit rather than a shimmer */
+.orbit i:nth-child(1) { animation-delay: 0ms; }
+.orbit i:nth-child(2) { animation-delay: 110ms; }
+.orbit i:nth-child(3) { animation-delay: 220ms; }
+.orbit i:nth-child(6) { animation-delay: 330ms; }
+.orbit i:nth-child(9) { animation-delay: 440ms; }
+.orbit i:nth-child(8) { animation-delay: 550ms; }
+.orbit i:nth-child(7) { animation-delay: 660ms; }
+.orbit i:nth-child(4) { animation-delay: 770ms; }
+.orbit i:nth-child(5) { animation: none; opacity: .07; }
+
+@keyframes pixel-on {
+  0%, 100% { opacity: .15; }
+  18%, 42% { opacity: 1; }
+  62%      { opacity: .15; }
+}
+
+.think-label {
+  font-size: 13.5px; font-weight: 550;
+  background-image: linear-gradient(90deg, var(--text-muted) 35%, var(--text) 50%, var(--text-muted) 65%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: shimmer-text 1.4s linear infinite;
+}
+@keyframes shimmer-text {
+  0%   { background-position: 150% center; }
+  100% { background-position: -50% center; }
+}
+
+.think-time {
+  font-family: var(--mono); font-size: 12px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums; margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit i { animation: none; opacity: .3; }
+  .orbit i:nth-child(5) { opacity: .12; }
+  .think-label {
+    animation: none; background: none; color: var(--text-muted);
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* ---------- Approval card ----------
+   Adapted from the "Approval Card" primitive on beautifului.dev: the question
+   as the card's header, then tight selectable rows with a ring indicator that
+   fills when chosen. Used for every choice question; free-text questions keep
+   a plain textarea, since a card of radio rows cannot ask an open question. */
+.ac {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 15px 16px 13px; margin: 16px 0 0;
+}
+.ac-q {
+  font-size: 14px; font-weight: 620; color: var(--text);
+  letter-spacing: -.01em; margin: 0;
+}
+.ac-help { font-size: 12.5px; color: var(--text-muted); margin: 5px 0 0; }
+.ac-opts { display: flex; flex-direction: column; gap: 1px; margin: 10px -6px 0; }
+
+.ac-opt {
+  display: flex; align-items: flex-start; gap: 9px;
+  width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  padding: 7px 6px; font-family: var(--font);
+  transition: background-color .1s;
+}
+.ac-opt:hover { background: var(--surface-2); }
+.ac-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* the ring: circle for pick-one, rounded square for pick-many */
+.ac-mark {
+  flex: none; width: 16px; height: 16px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+  transition: box-shadow .2s, background-color .2s;
+}
+.ac-opts.many .ac-mark { border-radius: 4px; }
+.ac-mark i {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--surface);
+  transform: scale(0); transition: transform .2s;
+}
+.ac-opts.many .ac-mark i { border-radius: 1px; }
+.ac-opt.on .ac-mark { background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ac-opt.on .ac-mark i { transform: scale(1); }
+
+.ac-label { font-size: 13px; color: #45505d; transition: color .2s; }
+.ac-opt.on .ac-label { color: var(--text); font-weight: 600; }
+.ac-sub { display: block; font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
+
+.ac-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border);
+}
+.ac-count { font-size: 12px; color: var(--text-muted); }

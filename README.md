@@ -120,6 +120,21 @@ backend.
 The questions, scoring weights, and shaping stages are plain data at the top of
 `assets/guide.js`, which is where to go when the wording turns out to be wrong.
 
+### Interface notes
+
+Two patterns are adapted from the primitives published at
+[beautifului.dev](https://www.beautifului.dev/), rebuilt against this project's own
+tokens rather than copied:
+
+- **The Orbit loader** shown between screens: a 3 by 3 pixel grid where the lit cell
+  travels clockwise around the eight outer squares while the centre stays dim, beside a
+  shimmering label and a monospace elapsed timer. The timer is the honest part, since it
+  shows exactly how long the pause is holding things up.
+- **The approval card** for every question with fixed choices: the question becomes the
+  card's header and each option is a selectable row, circles for pick-one and rounded
+  squares for pick-many, with a live count. Free-text questions keep a plain textarea,
+  because a card of radio rows cannot ask an open question.
+
 ## Horizon
 
 Pick 2 weeks through 12 months, or a custom number of days. The phase weights spread
