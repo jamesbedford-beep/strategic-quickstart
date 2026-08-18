@@ -8,7 +8,7 @@
 <!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
      new HTML with a cached older script, which throws and leaves the page half
      initialized. Same number on every asset so they can never mismatch. -->
-<link rel="stylesheet" href="assets/styles.css?v=8">
+<link rel="stylesheet" href="assets/styles.css?v=9">
 </head>
 <body>
 
@@ -18,6 +18,7 @@
     <nav class="tabs" id="tabs" aria-label="Sections">
       <button type="button" class="tab on" data-tab="guide">Start here</button>
       <button type="button" class="tab" data-tab="build">Custom build</button>
+      <button type="button" class="tab" data-tab="log">Changelog</button>
     </nav>
     <div class="topbar-actions" id="topbarActions">
       <span class="export-note" id="exportNote"></span>
@@ -35,7 +36,8 @@
       RACI matrix, charter, risk register, and more.
     </p>
     <p class="note">
-      Everything runs in your browser. No accounts, no uploads, no tracking. Works offline once loaded.
+      No accounts, no sign-in, no tracking. Your documents are built in the browser and
+      never leave it. Works offline once loaded.
     </p>
     <p class="joke">
       There is no server. Actually that is a lie: James is in the background making every one
@@ -211,11 +213,32 @@
         </span>
       </div>
 
+      <div class="reg" id="regPanel" hidden>
+        <p class="reg-q">Add this to the team register?</p>
+        <p class="reg-help" id="regWhat"></p>
+        <div class="reg-row">
+          <input type="text" id="regTeam" placeholder="Your team or program" autocomplete="off">
+          <button type="button" class="btn-ghost btn-ghost-inline" id="regSend">Log it</button>
+        </div>
+      </div>
+
       <div class="pv-tabs" id="previewTabs"></div>
       <p class="pv-file" id="previewMeta"></p>
       <div class="pv-body" id="previewBody"></div>
     </div>
   </aside>
+</main>
+
+<main class="wrap log-pane" id="logPane" hidden>
+  <section class="card">
+    <div class="card-head">
+      <h2>Changelog</h2>
+    </div>
+    <p class="hint">
+      What shipped in each release, and the feedback that drove the next one.
+    </p>
+    <div id="logList"></div>
+  </section>
 </main>
 
 <footer class="wrap foot">
@@ -232,14 +255,16 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js?v=8"></script>
-<script src="assets/sheet.js?v=8"></script>
-<script src="assets/plan.js?v=8"></script>
-<script src="assets/templates.js?v=8"></script>
-<script src="assets/people.js?v=8"></script>
-<script src="assets/render.js?v=8"></script>
-<script src="assets/build.js?v=8"></script>
-<script src="assets/app.js?v=8"></script>
-<script src="assets/guide.js?v=8"></script>
+<script src="assets/zip.js?v=9"></script>
+<script src="assets/sheet.js?v=9"></script>
+<script src="assets/plan.js?v=9"></script>
+<script src="assets/templates.js?v=9"></script>
+<script src="assets/people.js?v=9"></script>
+<script src="assets/changelog.js?v=9"></script>
+<script src="assets/usage-config.js?v=9"></script>
+<script src="assets/render.js?v=9"></script>
+<script src="assets/build.js?v=9"></script>
+<script src="assets/app.js?v=9"></script>
+<script src="assets/guide.js?v=9"></script>
 </body>
 </html>

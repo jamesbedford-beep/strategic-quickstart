@@ -457,6 +457,7 @@
   }
 
   function renderExportNote() {
+    refreshRegister();
     var n = selectedIds().length;
     $('exportBtn').disabled = n === 0;
     $('exportNote').textContent = n === 0
@@ -530,10 +531,12 @@
 
   /* Two panes: the guided Start here flow, and the Custom build form. */
   function showTab(name) {
-    var panes = { guide: 'guidePane', build: 'buildPane' };
+    var panes = { guide: 'guidePane', build: 'buildPane', log: 'logPane' };
     if (!panes[name]) name = 'guide';
     Object.keys(panes).forEach(function (k) { $(panes[k]).hidden = k !== name; });
+    $('hero').hidden = name === 'log';
     $('topbarActions').hidden = name !== 'build';   /* Export only means something on Build */
+    if (name === 'log') renderChangelog();
     var tabs = $('tabs').querySelectorAll('.tab');
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].classList.toggle('on', tabs[i].getAttribute('data-tab') === name);
@@ -586,6 +589,97 @@
     window.scrollTo(0, 0);
     toast('Set up from your answers. Adjust anything, then Export.');
   };
+
+
+  /* ---------------- changelog ---------------- */
+  function renderChangelog() {
+    var host = $('logList');
+    if (!host || host.dataset.done) return;
+    var rel = SIK.changelog || [];
+    host.innerHTML = rel.map(function (r) {
+      var fb = (r.feedback || []).map(function (f) {
+        if (f.awaiting) {
+          /* an open slot, not a summary of something nobody said */
+          return '<li class="fb fb-open"><b>' + R.esc(f.who) + '</b>' +
+            '<span>Not recorded yet.</span></li>';
+        }
+        return '<li class="fb"><b>' + R.esc(f.who) + '</b><span>' + R.esc(f.said) + '</span></li>';
+      }).join('');
+
+      return '<article class="rel' + (r.state === 'current' ? ' rel-now' : '') + '">' +
+        '<div class="rel-head">' +
+          '<span class="rel-v">' + R.esc(r.v) + '</span>' +
+          '<span class="rel-title">' + R.esc(r.title) + '</span>' +
+          '<span class="rel-date">' + R.esc(r.date) +
+            (r.state === 'current' ? ' · current' : '') + '</span>' +
+        '</div>' +
+        (r.summary ? '<p class="rel-sum">' + R.esc(r.summary) + '</p>' : '') +
+        '<div class="rel-cols">' +
+          '<div class="rel-col">' +
+            '<div class="rel-k">What shipped</div>' +
+            '<ul class="rel-list">' + (r.shipped || []).map(function (x) {
+              return '<li>' + R.esc(x) + '</li>';
+            }).join('') + '</ul>' +
+          '</div>' +
+          '<div class="rel-col rel-col-fb">' +
+            '<div class="rel-k">Feedback on it</div>' +
+            (fb ? '<ul class="fb-list">' + fb + '</ul>'
+                : '<p class="rel-none">None recorded.</p>') +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }).join('');
+    host.dataset.done = '1';
+  }
+
+  /* ---------------- optional team register ----------------
+     Records what the tool was used for, so there is an answer to "who is using
+     this and for what". Nothing is sent unless someone presses the button, and
+     only metadata goes: never the contents of a document. */
+  var UC = SIK.usageConfig || {};
+  function registerReady() {
+    return !!(UC.postUrl && UC.fields && UC.fields.what);
+  }
+
+  function refreshRegister() {
+    var panel = $('regPanel');
+    if (!panel) return;
+    if (!registerReady()) { panel.hidden = true; return; }
+    panel.hidden = false;
+    var ids = selectedIds();
+    $('regWhat').textContent = 'Records the title, the template, ' + ids.length +
+      ' document' + (ids.length === 1 ? '' : 's') + ' and the ' + horizonDays() +
+      ' day timeline. Never any document content.';
+  }
+
+  function sendRegister() {
+    if (!registerReady()) return;
+    var c = cfg();
+    var body = new FormData();
+    var f = UC.fields;
+    body.append(f.what, c.project);
+    if (f.team) body.append(f.team, ($('regTeam') && $('regTeam').value.trim()) || '');
+    if (f.template) body.append(f.template, (T.PRESETS[c.preset] || {}).label || c.preset);
+    if (f.documents) body.append(f.documents, selectedIds().map(function (id) {
+      var d = docById(id); return d ? d.name : id;
+    }).join(', '));
+    if (f.timeline) body.append(f.timeline, horizonDays() + ' days');
+
+    /* no-cors: Forms does not send CORS headers, so the response cannot be read.
+       Fire and forget, and say so rather than claiming a confirmed save. */
+    fetch(UC.postUrl, { method: 'POST', mode: 'no-cors', body: body })
+      .then(function () { registerDone(); }, function () { registerDone(); });
+  }
+
+  function registerDone() {
+    var panel = $('regPanel');
+    if (panel) {
+      panel.innerHTML = '<p class="reg-q">Sent to the team register. Thank you.</p>' +
+        '<p class="reg-help">We cannot confirm it saved from here, so if the register ' +
+        'looks short, that is worth checking rather than assuming.</p>';
+    }
+    toast('Logged to the team register');
+  }
 
   var toastTimer;
   function toast(msg) {
@@ -766,6 +860,7 @@
     });
 
     $('exportBtn').addEventListener('click', doExport);
+    if ($('regSend')) $('regSend').addEventListener('click', sendRegister);
 
     $('copyBtn').addEventListener('click', function () {
       var ids = selectedIds();

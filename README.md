@@ -135,6 +135,33 @@ tokens rather than copied:
   squares for pick-many, with a live count. Free-text questions keep a plain textarea,
   because a card of radio rows cannot ask an open question.
 
+## Changelog
+
+A third tab records each release: what shipped, and separately what feedback came back
+on it and from whom. It is data in `assets/changelog.js`, so adding a release means adding
+one object.
+
+Feedback is only listed where it was actually given. An entry marked `awaiting: true`
+renders as an open slot rather than a summary of something nobody said, which is the point:
+the changelog should show where feedback is still missing instead of quietly implying it
+was collected.
+
+## Team register (optional, off by default)
+
+To answer "who is using this and for what", `assets/usage-config.js` can point at a Google
+Form. Once it has a URL, a panel appears next to Export listing exactly what it would
+record, and sends only when someone presses the button.
+
+It records the project title, the template, which documents, the timeline length, and an
+optional team or program. It never records document content: nothing typed into a charter,
+scope list, risk register or plan leaves the browser.
+
+Nothing is ever sent automatically, and the panel is hidden entirely until the form is
+configured. That is deliberate. Silent telemetry would contradict what the homepage says,
+and a register the team does not know about is worse than no register. If you would rather
+it logged automatically, that is a decision to announce to the team first, not a default to
+slip in.
+
 ## Horizon
 
 Pick 2 weeks through 12 months, or a custom number of days. The phase weights spread

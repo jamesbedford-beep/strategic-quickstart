@@ -237,25 +237,99 @@
     return P.iso(d);
   }
 
-  /* A starting project name from the goal sentence. Strips the framing people
-     naturally open with ("work out whether we should...") so what is left reads
-     like a name rather than a fragment. Only ever a suggestion: the field is
-     editable and sits right next to it. */
-  var NAME_LEADS = /^(?:work out|figure out|find out|work through|decide(?: on)?|determine|assess|explore|scope(?: out)?|understand|establish|we\s+(?:need to|want to|should|are trying to)|i\s+(?:need to|want to|am trying to)|try(?:ing)? to|whether(?: or not)?|if|to)\s+/i;
+  /* ---------- suggesting a project title ----------
+     People type a sentence ("work out whether we should distribute reading
+     glasses in ethiopia"). Trimming that sentence gave fragments like
+     "Distribute reading glasses in ethiopia in", so instead we build a title:
+     keep the nouns, drop the framing verbs and filler, put the place first,
+     title case it, and append what kind of project it is. */
+
+  /* places EvAc works in, so "ethiopia" leads the title whatever case it is typed in */
+  var PLACES = ('ethiopia kenya malawi zambia nigeria liberia cameroon uganda tanzania ' +
+    'india pakistan madagascar rwanda ghana senegal mozambique zimbabwe bangladesh ' +
+    'nepal indonesia philippines vietnam bihar odisha telangana punjab haryana ' +
+    'karnataka maharashtra gujarat rajasthan sokoto kaduna lagos nairobi delhi').split(' ');
+
+  /* verbs that describe the doing, not the thing: the type suffix says it better */
+  var DROP_VERBS = ('work works working figure figuring decide deciding determine ' +
+    'assess assessing evaluate evaluating explore exploring investigate review ' +
+    'reviewing scope scoping understand establish distribute distributing deliver ' +
+    'delivering launch launching run running build building expand expanding scale ' +
+    'scaling offer offering provide providing test testing pilot piloting trial hire ' +
+    'hiring recruit recruiting set setting create creating develop developing ' +
+    'implement implementing roll rolling introduce introducing conduct conducting ' +
+    'improve improving increase increasing reduce reducing start starting begin ' +
+    'continue continuing check checking find finding get getting make making take ' +
+    'give giving move moving bring bringing put putting keep keeping').split(' ');
+
+  var STOP = ('a an the and or but if whether we us our i my you your they their it its ' +
+    'this that these those there here to of in on at by for from with without into onto ' +
+    'over under about across through during before after above below up down out off ' +
+    'is are was were be been being am do does did done have has had having can could ' +
+    'will would shall should may might must need needs not no yes so then than as also ' +
+    'more most less least much many some any all both each every other another such ' +
+    'own same very just only even still yet again once how what when where which who ' +
+    'whom why because while until unless since though although two three four five six ' +
+    'seven eight nine ten new next last first second existing current additional ' +
+    'further potential possible various several overall general key main core proper ' +
+    'better best good full whole entire').split(' ');
+
+  var TYPE_SUFFIX = {
+    'scoping-diagnostic': 'Decision',
+    'pilot-launch': 'Pilot',
+    'partnership-mou': 'Partnership',
+    'team-build': 'Recruitment',
+    'evac-accelerator': 'Accelerator Review',
+    'strategic-initiative': 'Initiative',
+    'blank': ''
+  };
+
+  /* Title Case, leaving small joining words lowercase when they survive */
+  var SMALL = ['and', 'or', 'of', 'in', 'for', 'to', 'the', 'a', 'an'];
+  function titleCase(words) {
+    return words.map(function (w, i) {
+      if (i > 0 && SMALL.indexOf(w.toLowerCase()) >= 0) return w.toLowerCase();
+      /* keep an existing internal capital (ANC, MOU, SQ-LNS) rather than flattening it */
+      if (/[A-Z]/.test(w.slice(1))) return w;
+      return w.split('-').map(function (part, j) {
+        return j === 0
+          ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+          : part.toLowerCase();
+      }).join('-');
+    }).join(' ');
+  }
 
   function suggestName() {
-    var g = String(answers.goal || '').trim();
-    if (!g) return '';
-    var s = g.split(/[.;\n]|,\s+(?:and|then|so)\s+/)[0].trim();
-    /* peel repeatedly: "work out whether we should offer X" -> "offer X" */
-    for (var i = 0; i < 4; i++) {
-      var next = s.replace(NAME_LEADS, '');
-      if (next === s) break;
-      s = next;
+    var goal = String(answers.goal || '').trim();
+    var suffix = TYPE_SUFFIX[presetFor()];
+    if (!goal) return '';        /* nothing to work from: leave the field empty */
+
+    /* first sentence only, and strip anything after "and get a decision by..." */
+    var first = goal.split(/[.;\n?!]/)[0];
+    var words = first.replace(/[(),:"']/g, ' ').split(/\s+/).filter(Boolean);
+
+    var places = [], content = [];
+    words.forEach(function (w) {
+      var lower = w.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (!lower || lower.length < 2) return;
+      if (PLACES.indexOf(lower) >= 0) {
+        if (places.indexOf(lower) < 0) places.push(w);
+        return;
+      }
+      if (STOP.indexOf(lower) >= 0 || DROP_VERBS.indexOf(lower) >= 0) return;
+      if (/^\d+$/.test(lower)) return;
+      if (content.length < 3) content.push(w);
+    });
+
+    var parts = places.slice(0, 2).concat(content);
+    if (!parts.length) return '';
+
+    var title = titleCase(parts);
+    /* the suffix says what kind of thing it is, unless the sentence said it already */
+    if (suffix && title.toLowerCase().indexOf(suffix.split(' ')[0].toLowerCase()) < 0) {
+      title += ' ' + suffix;
     }
-    if (s.length > 46) s = s.slice(0, 46).replace(/\s+\S*$/, '');
-    s = s.replace(/[,\s]+$/, '');
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+    return title;
   }
 
   /* ---------- rendering ---------- */
