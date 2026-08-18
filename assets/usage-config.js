@@ -1,11 +1,10 @@
 /* Optional team register: a record of what this tool has been used for, so you
    can see "used for X in the water team, Y in nutrition" rather than guessing.
 
-   Off until a form URL is filled in below, and even then nothing is ever sent
-   automatically. The register panel appears next to Export with the exact fields
-   it would record, and only sends when someone presses the button. That is
-   deliberate: silent telemetry would contradict what the homepage promises, and
-   a register nobody knows about is worse than no register.
+   Off until a form URL is filled in below. Once it is set, an export is recorded
+   automatically, and the homepage says so upfront before anyone starts: the
+   notice appears in the header, not buried in a settings page. That visibility is
+   the condition that makes automatic logging fair.
 
    What it records: project title, template, which documents, the timeline
    length, and an optional team or program. Never any document content, and never
@@ -14,10 +13,10 @@
    To switch it on:
      1. Make a Google Form with these questions, in this order, all short answer
         except the last: What / Team or program / Template / Documents /
-        Timeline. In Settings turn off "collect email addresses" and, if it is a
+        Timeline / Feedback. In Settings turn off "collect email addresses" and, if it is a
         Workspace form, turn off "restrict to users in your organization", so
         nobody needs to sign in.
-     2. Open the live form, view source, and find the five entry ids
+     2. Open the live form, view source, and find the entry ids
         (they look like entry.123456789). Paste them below in the same order.
      3. Put the form's action URL in postUrl: it is the /viewform URL with
         /viewform replaced by /formResponse.
@@ -37,7 +36,9 @@
       team: '',
       template: '',
       documents: '',
-      timeline: ''
+      timeline: '',
+      /* optional: anything typed into "what would you change" on the last screen */
+      feedback: ''
     }
   };
 })(window.SIK = window.SIK || {});

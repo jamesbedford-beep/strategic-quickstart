@@ -229,13 +229,8 @@
     var opt = a != null && QUESTIONS[1].options[a];
     return opt ? opt.label.toLowerCase() : '';
   }
-  /* the builder starts projects on the next Monday; mirror that so the dates we
-     propose here are the dates they actually get */
-  function startDate() {
-    var d = P.today();
-    while (d.getUTCDay() !== 1) d = P.addDays(d, 1);
-    return P.iso(d);
-  }
+  /* whatever the timeline is set to, so proposal dates are the dates they get */
+  function startDate() { return shape.start || defaultStart(); }
 
   /* ---------- suggesting a project title ----------
      People type a sentence ("work out whether we should distribute reading
@@ -374,10 +369,12 @@
       '</div>';
     }
 
-    if (mode === 'shape') html += renderStageDone();
+    if (mode === 'shape' || mode === 'deliver') html += renderStageDone();
 
     if (thinking) {
       html += renderThinking();
+    } else if (mode === 'deliver') {
+      html += renderDeliver();
     } else if (mode === 'shape') {
       html += renderStage();
     } else if (step < QUESTIONS.length) {
@@ -606,6 +603,11 @@
     if (!el) return;
     var total = QUESTIONS.length;
     var label, pct;
+    if (mode === 'deliver') {
+      el.innerHTML = '<div class="prog-track"><div class="prog-fill" style="width:100%"></div>' +
+        '</div><span class="prog-text">Done</span>';
+      return;
+    }
     if (mode === 'shape') {
       var stages = activeStages();
       /* second half of the bar belongs to shaping */
@@ -692,6 +694,24 @@
       return;
     }
 
+    if (e.target.id === 'dlExport') {
+      SIK.setFormats({
+        sheet: $('dlSheet').value, doc: $('dlDoc').value, bundle: $('dlBundle').value
+      });
+      SIK.exportNow($('dlFeedback') ? $('dlFeedback').value.trim() : '');
+      $('dlNote').textContent = 'Exported. Check your downloads folder.';
+      return;
+    }
+
+    if (e.target.id === 'dlSendFb') {
+      var txt = $('dlFeedback') ? $('dlFeedback').value.trim() : '';
+      if (!txt) { $('dlFeedback').focus(); return; }
+      SIK.logFeedback(txt);
+      $('dlFeedback').value = '';
+      $('dlNote').textContent = 'Feedback sent. Thank you.';
+      return;
+    }
+
     /* ---- shaping stage controls ---- */
     var sEdit = e.target.closest('[data-stageedit]');
     if (sEdit) { shape._editing = sEdit.getAttribute('data-stageedit'); render(); return; }
@@ -708,7 +728,7 @@
     if (tAdd) {
       var stA = activeStages()[shapeIdx];
       var rows = readTable();
-      rows.push(stA.textCol === 1 ? { name: '', ask: '' } : { name: '', days: 7 });
+      rows.push(stA.textCol === 1 ? { name: '', ask: '' } : { name: 'New stage', days: 7 });
       stA.commit(rows);
       render();
       return;
@@ -776,6 +796,7 @@
     /* name and owner were captured when shaping started: the spinner replaces the
        results card, so those inputs are long gone by the time this runs */
     think(HANDOFF_MSGS, THINK.handoff, function () {
+      mode = 'deliver';
       SIK.applyGuide({
         goal: String(answers.goal || '').trim(),
         project: shape.name || suggestName() || 'Untitled initiative',
@@ -785,14 +806,18 @@
         horizon: horizonFor(),
         docs: chosen,
         /* everything settled during the shaping conversation */
+        start: shape.start || defaultStart(),
         stages: (shape.stages && shape.stages.length) ? shape.stages : null,
         team: (shape.team || []).filter(function (m) { return m.name; }),
         around: shape.around || null,
         inScope: shape.inScope || null,
         outScope: shape.outScope || null,
         worries: shape.worries || null,
-        cadence: shape.cadence || ''
+        cadence: shape.cadence || '',
+        stayOnGuide: true          /* the delivery screen below is the handover */
       });
+      render();
+      window.scrollTo(0, 0);
     });
   }
 
@@ -806,6 +831,153 @@
   function splitLines(t) {
     return String(t || '').split('\n')
       .map(function (l) { return l.trim(); }).filter(Boolean);
+  }
+
+  /* ---------- the draggable timeline ----------
+     Stage lengths are easier to feel than to type, so the boundaries between
+     stages are draggable. Dragging a boundary lengthens the stage before it and
+     shortens the one after, which keeps the finish date still; dragging the last
+     one moves the finish date itself. Every handle is also focusable and takes
+     arrow keys, because a control you can only reach with a mouse is a control
+     some people cannot reach at all. */
+
+  function tlStart() { return P.parseISO(shape.start || defaultStart()); }
+
+  /* a few weeks out, on a Monday: almost nothing really starts tomorrow */
+  function defaultStart() {
+    var d = P.addDays(P.today(), 14);
+    while (d.getUTCDay() !== 1) d = P.addDays(d, 1);
+    return P.iso(d);
+  }
+
+  /* cumulative end-offsets, in days from the start */
+  function boundaries(stages) {
+    var acc = 0;
+    return stages.map(function (s) { acc += Math.max(1, s.days); return acc; });
+  }
+
+  function totalDays(stages) {
+    return stages.reduce(function (n, s) { return n + Math.max(1, s.days); }, 0);
+  }
+
+  function renderTimeline(stages) {
+    var start = tlStart();
+    var total = totalDays(stages);
+    var bounds = boundaries(stages);
+
+    /* month ticks along the axis */
+    var ticks = '';
+    var cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+    while (cur <= P.addDays(start, total - 1)) {
+      var off = P.diffDays(start, cur);
+      if (off > 0 && off < total) {
+        ticks += '<span class="tl-tick" style="left:' + (off / total * 100) + '%">' +
+          P.MONTHS[cur.getUTCMonth()] + '</span>';
+      }
+      cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
+    }
+
+    var segs = '', handles = '', from = 0;
+    stages.forEach(function (s, i) {
+      var w = Math.max(1, s.days) / total * 100;
+      segs += '<div class="tl-seg s' + (i % 4) + '" style="width:' + w + '%" title="' +
+        R.esc(s.name) + '"><span>' + (i + 1) + '</span></div>';
+      from = bounds[i];
+      var last = i === stages.length - 1;
+      handles += '<button type="button" class="tl-handle' + (last ? ' tl-end' : '') + '"' +
+        ' style="left:' + (from / total * 100) + '%"' +
+        ' data-tlh="' + i + '"' +
+        ' aria-label="' + R.esc(s.name) + ' ends ' + P.fmtShort(P.addDays(start, from - 1)) +
+          '. Arrow keys to move."' +
+        ' title="' + R.esc(s.name) + ' ends ' + P.fmtShort(P.addDays(start, from - 1)) + '">' +
+        '<i></i></button>';
+    });
+
+    return '<div class="tl-wrap">' +
+      '<div class="tl" id="tlBar">' +
+        '<div class="tl-segs">' + segs + '</div>' + handles +
+      '</div>' +
+      '<div class="tl-axis">' +
+        '<span class="tl-from">' + P.fmtShort(start) + '</span>' + ticks +
+        '<span class="tl-to">' + P.fmtShort(P.addDays(start, total - 1)) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderStageList(stages) {
+    var start = tlStart();
+    var bounds = boundaries(stages);
+    var total = totalDays(stages);
+    return '<div class="tl-list">' + stages.map(function (s, i) {
+      var from = i ? bounds[i - 1] : 0;
+      var s0 = P.addDays(start, from);
+      var s1 = P.addDays(start, bounds[i] - 1);
+      return '<div class="tl-row">' +
+        '<span class="tl-num s' + (i % 4) + '">' + (i + 1) + '</span>' +
+        '<input type="text" data-tk="name" data-ti="' + i + '" value="' + R.esc(s.name || '') +
+          '" placeholder="Stage name">' +
+        '<span class="days-in"><input type="number" data-tk="days" data-ti="' + i +
+          '" min="1" max="730" value="' + Math.max(1, s.days) + '"><em>days</em></span>' +
+        '<span class="tl-dates">' + P.fmtShort(s0) + ' to ' + P.fmtShort(s1) + '</span>' +
+        '<button type="button" class="btn-x" data-trm="' + i + '" title="Remove">&times;</button>' +
+      '</div>';
+    }).join('') + '</div>' +
+    '<p class="tbl-total">' + total + ' days in total, finishing ' +
+      P.fmtLong(P.addDays(start, total - 1)) + '.</p>';
+  }
+
+  /* move the boundary after stage i by `delta` days */
+  function nudgeBoundary(i, delta) {
+    var stages = proposedStages();
+    if (!stages[i]) return;
+    var last = i === stages.length - 1;
+    var before = Math.max(1, stages[i].days);
+
+    if (last) {
+      stages[i].days = Math.max(1, before + delta);       /* the finish date moves */
+    } else {
+      var after = Math.max(1, stages[i + 1].days);
+      /* clamp so neither neighbour drops below a day: the finish date holds still */
+      var d = Math.max(1 - before, Math.min(after - 1, delta));
+      stages[i].days = before + d;
+      stages[i + 1].days = after - d;
+    }
+    shape.stages = stages;
+  }
+
+  /* live redraw of just the timeline and list, so dragging feels immediate */
+  function repaintTimeline() {
+    var host = $('tlHost');
+    if (!host) return;
+    var stages = proposedStages();
+    host.innerHTML = renderTimeline(stages) + renderStageList(stages);
+  }
+
+  function startDrag(handle, ev) {
+    var bar = $('tlBar');
+    if (!bar) return;
+    var i = +handle.getAttribute('data-tlh');
+    var rect = bar.getBoundingClientRect();
+    var total = totalDays(proposedStages());
+    var pxPerDay = rect.width / total;
+    var startX = ev.clientX;
+    var moved = 0;
+
+    function onMove(e) {
+      var delta = Math.round((e.clientX - startX) / pxPerDay) - moved;
+      if (!delta) return;
+      nudgeBoundary(i, delta);
+      moved += delta;
+      repaintTimeline();
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.classList.remove('dragging');
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.body.classList.add('dragging');
   }
 
   /* A stage is {name, days}. Lengths come from the preset's own weighting, which
@@ -840,7 +1012,7 @@
 
   var STAGES = [
     {
-      id: 'stages', needs: ['plan', 'gantt'], type: 'table',
+      id: 'stages', needs: ['plan', 'gantt'], type: 'timeline',
       title: 'Does this shape look right?',
       why: 'This becomes the phases of your project plan and the bars on your Gantt.',
       propose: function () {
@@ -857,7 +1029,6 @@
           sched: sched
         };
       },
-      cols: ['Stage', 'Length'],
       rows: function () { return proposedStages(); },
       commit: function (rows) { if (rows.length) shape.stages = rows; }
     },
@@ -921,6 +1092,62 @@
     });
   }
 
+
+  /* ---------- the last screen ----------
+     Dropping someone into the builder at the end left them wondering what had
+     happened. Instead: here is what was made, here is how to take it, and here is
+     what to do if it is not right. */
+  function renderDeliver() {
+    var c = SIK.guideResult || {};
+    var docs = (c.docs || []).map(function (id) {
+      var d = SIK.templates.DOCS.filter(function (x) { return x.id === id; })[0];
+      return d ? d : null;
+    }).filter(Boolean);
+
+    var h = '<div class="gq gq-active ac deliver">' +
+      '<p class="ac-q">Your documents are ready</p>' +
+      '<p class="ac-help">Set up from your answers, and nothing has been sent anywhere. ' +
+        'Check the shape below, choose a format, and export.</p>' +
+      '<div class="dl-list">' + docs.map(function (d) {
+        return '<div class="dl-item">' +
+          '<span class="dl-ext ' + (d.kind === 'sheet' ? 'is-x' : 'is-d') + '">' +
+            (d.kind === 'sheet' ? 'XLS' : 'DOC') + '</span>' +
+          '<span><span class="dl-name">' + R.esc(d.name) + '</span>' +
+            '<span class="dl-helps">' + R.esc(d.helps || d.blurb || '') + '</span></span>' +
+        '</div>';
+      }).join('') + '</div>' +
+
+      '<div class="dl-fmt">' +
+        '<label class="ff"><span>Spreadsheets</span>' +
+          '<select id="dlSheet"><option value="xlsx">Excel (.xlsx)</option>' +
+          '<option value="csv">CSV (.csv)</option></select></label>' +
+        '<label class="ff"><span>Documents</span>' +
+          '<select id="dlDoc"><option value="md">Markdown (.md)</option>' +
+          '<option value="html">Word-compatible (.html)</option></select></label>' +
+        '<label class="ff"><span>Download</span>' +
+          '<select id="dlBundle"><option value="zip">One zip file</option>' +
+          '<option value="files">Separate files</option></select></label>' +
+      '</div>' +
+
+      '<button type="button" class="btn-primary dl-go" id="dlExport">Export my documents</button>' +
+      '<p class="dl-note" id="dlNote"></p>' +
+
+      '<div class="dl-more">' +
+        '<p class="ac-q">Not quite right?</p>' +
+        '<label class="ff"><span>Tell me what you would change</span>' +
+          '<textarea id="dlFeedback" rows="3" placeholder="e.g. the risk register should start with funding risks, or we need a separate budget sheet"></textarea></label>' +
+        '<p class="ac-help">This is recorded so the tool can be changed for next time. It does ' +
+          'not edit your files now. To change them yourself, open the builder, where every ' +
+          'field is editable and the preview updates as you type.</p>' +
+        '<div class="dl-more-row">' +
+          '<button type="button" class="btn-ghost btn-ghost-inline" id="dlSendFb">Send this feedback</button>' +
+          '<button type="button" class="btn-ghost btn-ghost-inline" data-goto="build">Open the builder and keep editing</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    return h;
+  }
+
   function renderStage() {
     var stages = activeStages();
     var st = stages[shapeIdx];
@@ -931,13 +1158,22 @@
       (st.why ? '<p class="ac-why"><b>Why this helps:</b> ' + R.esc(st.why) + '</p>' : '') +
       (st.help ? '<p class="ac-help">' + R.esc(st.help) + '</p>' : '');
 
-    if (st.type === 'table') {
+    if (st.type === 'timeline') {
+      var tstages = proposedStages();
+      h += '<p class="prop-lead">' + R.esc(st.propose().lead) + '</p>' +
+        '<label class="ff tl-start"><span>Start date</span>' +
+          '<input type="date" id="tlStart" value="' + R.esc(shape.start || defaultStart()) + '"></label>' +
+        '<p class="tl-hint">Drag the markers to move a stage boundary. The last one moves the ' +
+          'finish date; the others trade days between neighbours. Arrow keys work too.</p>' +
+        '<div id="tlHost">' + renderTimeline(tstages) + renderStageList(tstages) + '</div>' +
+        '<button type="button" class="btn-ghost" data-tadd="1">+ Add stage</button>';
+    } else if (st.type === 'table') {
       var rows = st.rows();
       if (st.propose) {
         var pr = st.propose();
         h += '<p class="prop-lead">' + R.esc(pr.lead) + '</p>';
       }
-      var sched = st.id === 'stages' ? stagesSchedule(rows) : null;
+      var sched = null;
       h += '<div class="tbl">' +
         '<div class="tbl-head"><span>' + R.esc(st.cols[0]) + '</span><span>' +
           R.esc(st.cols[1]) + '</span>' + (sched ? '<span>Lands</span>' : '') + '<span></span></div>' +
@@ -1000,10 +1236,10 @@
      dates and the total move with whatever was just typed */
   function readTable() {
     var st = activeStages()[shapeIdx];
-    if (!st || st.type !== 'table') return [];
+    if (!st || (st.type !== 'table' && st.type !== 'timeline')) return [];
     var host = $('guideFlow');
     var rows = [];
-    host.querySelectorAll('.tbl-row').forEach(function (row, i) {
+    host.querySelectorAll('.tbl-row, .tl-row').forEach(function (row, i) {
       var name = row.querySelector('[data-tk="name"]');
       var days = row.querySelector('[data-tk="days"]');
       var ask = row.querySelector('[data-tk="ask"]');
@@ -1019,7 +1255,7 @@
   function commitStage() {
     var st = activeStages()[shapeIdx];
     if (!st) return;
-    if (st.type === 'table') {
+    if (st.type === 'table' || st.type === 'timeline') {
       st.commit(readTable());
     } else if (st.type === 'pair') {
       st.commit($('stageA') && $('stageA').value, $('stageB') && $('stageB').value);
@@ -1053,9 +1289,10 @@
       var st = stages[i];
       var summary = '';
       if (st.id === 'stages') {
-        summary = proposedStages().map(function (x) {
-          return x.name + ' (' + x.days + 'd)';
-        }).join(' → ');
+        var ss = proposedStages();
+        summary = P.fmtShort(tlStart()) + ' to ' +
+          P.fmtShort(P.addDays(tlStart(), totalDays(ss) - 1)) + ' · ' +
+          ss.map(function (x) { return x.name + ' (' + x.days + 'd)'; }).join(' → ');
       } else if (st.id === 'around') summary = (shape.around || []).join('; ') || 'Skipped';
       else if (st.id === 'team') {
         summary = (shape.team || []).filter(function (m) { return m.name; })
@@ -1080,6 +1317,36 @@
     var host = $('guideFlow');
     if (!host) return;
     host.addEventListener('click', onClick);
+
+    /* dragging a boundary */
+    host.addEventListener('pointerdown', function (e) {
+      var handle = e.target.closest('[data-tlh]');
+      if (!handle) return;
+      e.preventDefault();
+      handle.focus();
+      startDrag(handle, e);
+    });
+
+    /* the same move, from the keyboard */
+    host.addEventListener('keydown', function (e) {
+      var handle = e.target.closest && e.target.closest('[data-tlh]');
+      if (!handle) return;
+      var step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      var i = +handle.getAttribute('data-tlh');
+      nudgeBoundary(i, e.shiftKey ? step * 7 : step);
+      repaintTimeline();
+      var again = $('guideFlow').querySelector('[data-tlh="' + i + '"]');
+      if (again) again.focus();
+    });
+
+    /* start date */
+    host.addEventListener('change', function (e) {
+      if (e.target.id !== 'tlStart') return;
+      shape.start = e.target.value || defaultStart();
+      repaintTimeline();
+    });
     host.addEventListener('change', onDocToggle);
     host.addEventListener('input', function (e) {
       if (e.target.id === 'gqText') e.target.classList.remove('needs');

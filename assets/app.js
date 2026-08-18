@@ -501,7 +501,6 @@
   }
 
   function renderExportNote() {
-    refreshRegister();
     var n = selectedIds().length;
     $('exportBtn').disabled = n === 0;
     $('exportNote').textContent = n === 0
@@ -533,6 +532,7 @@
   function doExport() {
     var built = buildAll();
     if (!built.items.length) return;
+    logUsage(state.changeRequest || '');
     var folder = slug(built.c.project) + '-project-kit';
     var files = built.items.map(materialize);
 
@@ -612,6 +612,7 @@
     state.worries = res.worries || [];
     state.cadence = res.cadence || '';
     state.around = res.around || [];
+    if (res.start) state.start = res.start;
     state.horizon = res.horizon;
     state.days = res.horizon;
     if (res.docs && res.docs.length) state.docs = res.docs.slice();
@@ -630,14 +631,37 @@
     } else if (res.owner && !(state.team || []).some(function (m) { return (m.name || '').trim(); })) {
       state.team = [{ name: res.owner, initials: initialsOf(res.owner), role: '' }];
     }
+    /* remember what the wizard chose, so its last screen can list it back */
+    SIK.guideResult = { docs: (res.docs || []).slice() };
+
     syncForm();
     renderTeam();
     renderPhases();
     renderDocs();
     refresh();
-    showTab('build');
-    window.scrollTo(0, 0);
-    toast('Set up from your answers. Adjust anything, then Export.');
+    /* the wizard shows its own delivery screen; only jump tabs when it does not */
+    if (!res.stayOnGuide) {
+      showTab('build');
+      window.scrollTo(0, 0);
+      toast('Set up from your answers. Adjust anything, then Export.');
+    }
+  };
+
+  /* used by the wizard's last screen */
+  SIK.setFormats = function (f) {
+    if (f.sheet) state.sheetfmt = f.sheet;
+    if (f.doc) state.docfmt = f.doc;
+    if (f.bundle) state.bundle = f.bundle;
+    syncForm();
+    renderDocs();
+    refresh();
+  };
+  SIK.exportNow = function (feedback) {
+    state.changeRequest = feedback || '';
+    doExport();
+  };
+  SIK.logFeedback = function (text) {
+    logUsage(text);
   };
 
 
@@ -682,53 +706,43 @@
     host.dataset.done = '1';
   }
 
-  /* ---------------- optional team register ----------------
-     Records what the tool was used for, so there is an answer to "who is using
-     this and for what". Nothing is sent unless someone presses the button, and
-     only metadata goes: never the contents of a document. */
+  /* ---------------- team register ----------------
+     Records what the tool gets used for, so there is a real answer to "who is
+     using this and for what". It fires automatically on export, which the
+     homepage says plainly before anyone starts: the notice is not buried, and
+     nothing anyone typed into a document is ever sent. Metadata only.
+
+     Silent until a form URL is configured, so a fork of this repo logs nothing. */
   var UC = SIK.usageConfig || {};
   function registerReady() {
     return !!(UC.postUrl && UC.fields && UC.fields.what);
   }
 
-  function refreshRegister() {
-    var panel = $('regPanel');
-    if (!panel) return;
-    if (!registerReady()) { panel.hidden = true; return; }
-    panel.hidden = false;
-    var ids = selectedIds();
-    $('regWhat').textContent = 'Records the title, the template, ' + ids.length +
-      ' document' + (ids.length === 1 ? '' : 's') + ' and the ' + horizonDays() +
-      ' day timeline. Never any document content.';
+  function showRegisterNotice() {
+    var el = $('regNotice');
+    if (el) el.hidden = !registerReady();
   }
 
-  function sendRegister() {
+  /* extra is free text from the delivery screen, when someone asks for a change */
+  function logUsage(extra) {
     if (!registerReady()) return;
     var c = cfg();
-    var body = new FormData();
     var f = UC.fields;
+    var body = new FormData();
     body.append(f.what, c.project);
-    if (f.team) body.append(f.team, ($('regTeam') && $('regTeam').value.trim()) || '');
+    if (f.team) body.append(f.team, (state.teamName || '').trim());
     if (f.template) body.append(f.template, (T.PRESETS[c.preset] || {}).label || c.preset);
     if (f.documents) body.append(f.documents, selectedIds().map(function (id) {
       var d = docById(id); return d ? d.name : id;
     }).join(', '));
-    if (f.timeline) body.append(f.timeline, horizonDays() + ' days');
+    if (f.timeline) body.append(f.timeline, totalPhaseDays() + ' days from ' + c.startDate);
+    if (f.feedback && extra) body.append(f.feedback, extra);
 
-    /* no-cors: Forms does not send CORS headers, so the response cannot be read.
-       Fire and forget, and say so rather than claiming a confirmed save. */
-    fetch(UC.postUrl, { method: 'POST', mode: 'no-cors', body: body })
-      .then(function () { registerDone(); }, function () { registerDone(); });
-  }
-
-  function registerDone() {
-    var panel = $('regPanel');
-    if (panel) {
-      panel.innerHTML = '<p class="reg-q">Sent to the team register. Thank you.</p>' +
-        '<p class="reg-help">We cannot confirm it saved from here, so if the register ' +
-        'looks short, that is worth checking rather than assuming.</p>';
-    }
-    toast('Logged to the team register');
+    /* no-cors: Forms sends no CORS headers, so the result cannot be read. Fire
+       and forget rather than pretending the save was confirmed. */
+    try {
+      fetch(UC.postUrl, { method: 'POST', mode: 'no-cors', body: body });
+    } catch (e) { /* offline: the export still happens, which is what matters */ }
   }
 
   var toastTimer;
@@ -926,7 +940,7 @@
     });
 
     $('exportBtn').addEventListener('click', doExport);
-    if ($('regSend')) $('regSend').addEventListener('click', sendRegister);
+    showRegisterNotice();
 
     $('copyBtn').addEventListener('click', function () {
       var ids = selectedIds();

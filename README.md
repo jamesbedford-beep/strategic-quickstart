@@ -103,9 +103,13 @@ proposes a shape and asks whether it is right:
 > 5 stages of about 18 days each, each ending in a milestone, so something lands roughly
 > every 3 weeks.
 
-It arrives as an editable table of stage and length, with the dates each one lands on
-computed by the same scheduler that writes the spreadsheet, so the proposal cannot drift
-from the output. Change a length and everything after it shifts.
+It arrives as a **draggable timeline**. Each stage is a segment; drag the marker between two
+of them and they trade days while the finish date holds still, or drag the last marker to
+move the finish date itself. Every marker is a real button, so arrow keys move it too
+(shift for a week at a time), because a control you can only reach with a mouse is a control
+some people cannot reach at all. Stage names and exact day counts sit underneath with the
+dates each one lands on, and the start date defaults to a couple of weeks out, since almost
+nothing really starts tomorrow.
 
 Later stages ask what to plan around (holidays, fieldwork, someone on leave), who is
 involved **and what you need from each of them**, what is in and deliberately out of scope,
@@ -148,6 +152,16 @@ tokens rather than copied:
   squares for pick-many, with a live count. Free-text questions keep a plain textarea,
   because a card of radio rows cannot ask an open question.
 
+## The last screen
+
+The wizard used to end by dropping people into the builder, which left them wondering what
+had happened. It now finishes on its own screen: the documents it made, with a format
+picker and one large Export button, and underneath, a box for saying what they would change.
+
+That box is honest about itself. It records the request for the next version of the tool; it
+does not edit the files there and then. Next to it is a link into the builder, which is
+where editing actually happens.
+
 ## Changelog
 
 A third tab records each release: what shipped, and separately what feedback came back
@@ -159,21 +173,21 @@ renders as an open slot rather than a summary of something nobody said, which is
 the changelog should show where feedback is still missing instead of quietly implying it
 was collected.
 
-## Team register (optional, off by default)
+## Team register
 
-To answer "who is using this and for what", `assets/usage-config.js` can point at a Google
-Form. Once it has a URL, a panel appears next to Export listing exactly what it would
-record, and sends only when someone presses the button.
+`assets/usage-config.js` can point at a Google Form. Once it has a URL, every export is
+recorded: the project title, the template, which documents, the timeline, and anything typed
+into "what would you change".
 
-It records the project title, the template, which documents, the timeline length, and an
-optional team or program. It never records document content: nothing typed into a charter,
-scope list, risk register or plan leaves the browser.
+It never records document content. Nothing typed into a charter, scope list, risk register
+or plan leaves the browser.
 
-Nothing is ever sent automatically, and the panel is hidden entirely until the form is
-configured. That is deliberate. Silent telemetry would contradict what the homepage says,
-and a register the team does not know about is worse than no register. If you would rather
-it logged automatically, that is a decision to announce to the team first, not a default to
-slip in.
+Because it is automatic, the homepage says so **before anyone starts**, in the header rather
+than buried in a settings page. That visibility is the condition that makes automatic
+logging fair, so if you change the recording, change the notice with it.
+
+Until the form URL is set, nothing is sent and the notice stays hidden, so a fork of this
+repo logs nothing.
 
 ## Horizon
 
