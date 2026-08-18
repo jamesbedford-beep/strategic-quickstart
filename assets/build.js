@@ -175,11 +175,38 @@
     var lastPersonCol = S.colName(1 + nCol);
     var checkCol = S.colName(2 + nCol);
 
+    var driIdx = -1;
+    team.forEach(function (m, i) {
+      if (cfg.dri && ((m.name || '').trim() === cfg.dri.trim() || (m.initials || '').trim() === cfg.dri.trim())) driIdx = i;
+    });
+
+    /* Read each person's "what you need from them" and pre-fill their column.
+       Approving or signing off is Consulted; being told is Informed. A phrase like
+       "at the end" means they belong on the closing rows, not on every stage, so
+       marking them everywhere would be worse than leaving the earlier rows blank. */
+    /* doing the work is R, approving is C, being told is I. Checked in that order,
+       because "signs off" is not doing the work and "runs it" is not approving. */
+    var DOES = /(runs?|does|do|deliver|leads?|writes?|builds?|drafts?|owns?|manages?|executes?|carries out|responsible|handles?|collect|analys|analyz|interview|facilitat)/i;
+    var APPROVE = /(approv|sign\w*\s*-?\s*off|signoff|go\s*\/?\s*no.?go|decide|decid|decision|authoris|authoriz|clear it|final say|veto)/i;
+    var INFORM = /(inform|let\s+\S+\s+know|keep\s+\S+\s+(posted|informed|updated|in the loop)|know|updated?|aware|visibility|copied|cc|sighted)/i;
+    var LATE = /(at the end|by the end|at the close|final|finally|at the conclusion|once .* (done|finished)|when .* (done|finished)|afterwards)/i;
+
+    var marks = team.map(function (m, i) {
+      if (i === driIdx) return null;                 /* the owner already carries the A */
+      var ask = (m.ask || '').trim();
+      if (!ask) return null;
+      var letter = DOES.test(ask) ? 'R' : (APPROVE.test(ask) ? 'C' : (INFORM.test(ask) ? 'I' : ''));
+      if (!letter) return null;
+      return { letter: letter, lateOnly: LATE.test(ask) };
+    });
+
     var rows = [];
     rows.push(row([C(cfg.project + ' RACI matrix', 'title')], 26));
     rows.push(row([C(metaLine(cfg, sched), 'muted')], 16));
     rows.push(row([C('R = Responsible, does the work.   A = Accountable, owns the outcome, exactly one per row.   ' +
-      'C = Consulted before the decision.   I = Informed after it.', 'muted')], 16));
+      'C = Consulted before the decision.   I = Informed after it.' +
+      (marks.some(Boolean) ? '   Pre-filled from what you said you need from each person: check it.' : ''),
+      'muted')], 16));
     rows.push(row([]));
 
     var hd = [C('Workstream / decision', 'headL')];
@@ -187,31 +214,41 @@
     hd.push(C('Check', 'headL'));
     rows.push(row(hd, 40));
 
-    var driIdx = -1;
-    team.forEach(function (m, i) {
-      if (cfg.dri && ((m.name || '').trim() === cfg.dri.trim() || (m.initials || '').trim() === cfg.dri.trim())) driIdx = i;
-    });
 
-    function body(label, aIdx) {
+    function body(label, aIdx, opts) {
       var r = rows.length + 1;
+      var late = opts && opts.late;      /* a closing row: late-only people belong here */
+      var standing = opts && opts.standing;
       var cells = [C(label, 'cell')];
-      for (var i = 0; i < nCol; i++) cells.push(C(i === aIdx ? 'A' : '', 'cellC'));
+      for (var i = 0; i < nCol; i++) {
+        var v = '';
+        if (i === aIdx) v = 'A';
+        else if (marks[i] && (!marks[i].lateOnly || late)) {
+          /* "runs the interviews" makes someone R on the delivery work, but says
+             nothing about who decides on hiring or comms, so R does not spread to
+             the standing decisions. Consulted and Informed reasonably do. */
+          if (!(standing && marks[i].letter === 'R')) v = marks[i].letter;
+        }
+        cells.push(C(v, 'cellC'));
+      }
       cells.push(F('IF(COUNTIF(B' + r + ':' + lastPersonCol + r + ',"A")=1,"OK","Needs exactly one A")', 'cell'));
       rows.push(row(cells));
     }
 
-    sched.phases.forEach(function (ph) {
+    sched.phases.forEach(function (ph, pi) {
       var idx = driIdx;
       team.forEach(function (m, i) {
         if (ph.owner && ((m.initials || '').trim() === ph.owner.trim() || (m.name || '').trim() === ph.owner.trim())) idx = i;
       });
-      body(ph.name, idx);
+      body(ph.name, idx, { late: pi === sched.phases.length - 1 });
     });
 
     rows.push(row([]));
     var bandCells = [C('Standing decisions', 'phase')].concat(fill(nCol + 1, 'phase'));
     rows.push(row(bandCells, 20));
-    T.STANDING_DECISIONS.forEach(function (d) { body(d, driIdx); });
+    T.STANDING_DECISIONS.forEach(function (d) {
+      body(d, driIdx, { standing: true, late: /go \/ no go|escalation/i.test(d) });
+    });
 
     var last = rows.length;
     var cols = [{ w: 46 }];

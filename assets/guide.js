@@ -808,7 +808,15 @@
         /* everything settled during the shaping conversation */
         start: shape.start || defaultStart(),
         stages: (shape.stages && shape.stages.length) ? shape.stages : null,
-        team: (shape.team || []).filter(function (m) { return m.name; }),
+        team: (function () {
+          var t = (shape.team || []).filter(function (m) { return m.name; });
+          if (t.length) return t;
+          /* skipped the question, but they still named someone earlier */
+          var seeded = peopleFromSignoff();
+          return shape.owner
+            ? [{ name: shape.owner, ask: '' }].concat(seeded)
+            : seeded;
+        })(),
         around: shape.around || null,
         inScope: shape.inScope || null,
         outScope: shape.outScope || null,
@@ -831,6 +839,54 @@
   function splitLines(t) {
     return String(t || '').split('\n')
       .map(function (l) { return l.trim(); }).filter(Boolean);
+  }
+
+  /* ---------- people named in the sign-off answer ----------
+     Someone who writes "need to let Kyle know at the end" has told us both a name
+     and what they want from them. That used to reach only the stakeholder map,
+     which meant the RACI arrived without the one person they had actually named.
+     Now it seeds the team question and the RACI columns as well. */
+
+  /* words that get capitalised because they start a sentence, not because they are names */
+  var NOT_NAMES = ('need needs want wants must should would could will let lets keep keeps ' +
+    'make makes tell tells inform informs update updates please also and but the this that ' +
+    'these those it he she they we i my our once when after before at by for to in on of ' +
+    'get gets give gives run runs sign signs approve approves review reviews check checks ' +
+    'nobody none someone anyone everyone maybe probably just only').split(' ');
+
+  function expandName(token) {
+    /* a bare first name is usually enough to identify someone on the roster.
+       SIK.people, not app.js's ROSTER: that one is not in this file's scope. */
+    var hits = (SIK.people || []).filter(function (per) {
+      return per.n.split(/\s+/)[0].toLowerCase() === token.toLowerCase();
+    });
+    return hits.length === 1 ? hits[0].n : token;
+  }
+
+  function peopleFromSignoff() {
+    var txt = String(answers.signoff || '').trim();
+    if (!txt) return [];
+    var out = [];
+    txt.split(/[;,\n]|\band\b/).forEach(function (frag) {
+      var f = frag.trim().replace(/[.\s]+$/, '');
+      if (!f) return;
+      var words = f.split(/\s+/);
+      var name = '';
+      for (var i = 0; i < words.length; i++) {
+        var bare = words[i].replace(/[^A-Za-z'-]/g, '');
+        if (/^[A-Z]/.test(bare) && NOT_NAMES.indexOf(bare.toLowerCase()) < 0) {
+          name = expandName(bare);
+          break;
+        }
+      }
+      /* the fragment reads as the ask once the framing is trimmed off the front */
+      var ask = f.replace(/^(?:we\s+|i\s+)?(?:need to|want to|have to|must|should)\s+/i, '');
+      ask = ask.charAt(0).toLowerCase() + ask.slice(1);
+      if (!name) return;                      /* a role, not a person: stakeholder map has it */
+      if (out.some(function (o) { return o.name === name; })) return;
+      out.push({ name: name, ask: ask });
+    });
+    return out;
   }
 
   /* ---------- the draggable timeline ----------
@@ -1046,13 +1102,23 @@
     {
       id: 'team', needs: ['raci', 'plan'], type: 'table', skippable: true,
       title: 'Who is involved, and what do you need from them?',
-      why: 'Names become the columns of your RACI. What you need from them becomes their ' +
-        'decision rights in the charter and what they care about in the stakeholder map.',
+      why: 'Names become the columns of your RACI, marked C or I from what you need from ' +
+        'them. It also sets their decision rights in the charter and what they care about in ' +
+        'the stakeholder map.',
+      help: function () {
+        var seeded = peopleFromSignoff();
+        return seeded.length
+          ? 'Carried over from your earlier answer: ' +
+            seeded.map(function (x) { return x.name; }).join(', ') + '. Edit or remove freely.'
+          : '';
+      },
       cols: ['Name', 'What you need from them'],
       textCol: 1,
       rows: function () {
         if (shape.team && shape.team.length) return shape.team.slice();
-        return [{ name: shape.owner || '', ask: '' }, { name: '', ask: '' }, { name: '', ask: '' }];
+        var seeded = [{ name: shape.owner || '', ask: '' }].concat(peopleFromSignoff());
+        while (seeded.length < 3) seeded.push({ name: '', ask: '' });
+        return seeded;
       },
       commit: function (rows) { shape.team = rows; }
     },
@@ -1156,7 +1222,10 @@
     var h = '<div class="gq gq-active gq-stage ac">' +
       '<p class="ac-q">' + R.esc(st.title) + '</p>' +
       (st.why ? '<p class="ac-why"><b>Why this helps:</b> ' + R.esc(st.why) + '</p>' : '') +
-      (st.help ? '<p class="ac-help">' + R.esc(st.help) + '</p>' : '');
+      (function () {
+        var hp = typeof st.help === 'function' ? st.help() : st.help;
+        return hp ? '<p class="ac-help">' + R.esc(hp) + '</p>' : '';
+      })();
 
     if (st.type === 'timeline') {
       var tstages = proposedStages();
