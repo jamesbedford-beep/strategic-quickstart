@@ -9,11 +9,18 @@
   var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
   /* ---------------- state ---------------- */
-  function presetPhases(id) {
+  /* Turn a preset's proportional weights into concrete day counts against a
+     window. The presets deliberately weight phases unevenly, and that shape is
+     worth keeping: a deep dive really is longer than a screening. */
+  function presetPhases(id, windowDays) {
     var p = T.PRESETS[id] || T.PRESETS['strategic-initiative'];
+    var total = windowDays || 91;
+    var sumW = p.phases.reduce(function (n, ph) { return n + (ph.weight || 1); }, 0);
     return p.phases.map(function (ph) {
       return {
-        name: ph.name, weight: ph.weight, owner: '',
+        name: ph.name,
+        days: Math.max(1, Math.round((ph.weight || 1) / sumW * total)),
+        owner: '',
         tasks: ph.tasks.map(function (t) {
           return t.charAt(0) === '*' ? '* ' + t.slice(1).trim() : t;
         }).join('\n')
@@ -21,21 +28,38 @@
     });
   }
 
+  function phaseDays(p) { return Math.max(1, Math.round(Number(p.days) || 1)); }
+
+  /* stretch or squeeze every phase proportionally into a new total */
+  function rescalePhases(target) {
+    var ph = state.phases || [];
+    if (!ph.length) return;
+    var sum = totalPhaseDays();
+    if (!sum || sum === target) return;
+    var factor = target / sum;
+    ph.forEach(function (p) { p.days = Math.max(1, Math.round(phaseDays(p) * factor)); });
+  }
+  function totalPhaseDays() {
+    return (state.phases || []).reduce(function (n, p) { return n + phaseDays(p); }, 0);
+  }
+
 
   /* Build the phase list, honouring the stage names agreed during shaping. Preset
      task lists are kept positionally, so renaming a stage keeps its tasks; stages
      beyond the preset get a neutral placeholder rather than tasks borrowed from an
      unrelated phase. */
-  function phasesFor(presetId, names) {
-    var base = presetPhases(presetId);
-    if (!names || !names.length) return base;
-    return names.map(function (n, i) {
+  function phasesFor(presetId, stages, windowDays) {
+    var base = presetPhases(presetId, windowDays);
+    if (!stages || !stages.length) return base;
+    return stages.map(function (st, i) {
       var from = base[i];
+      var name = typeof st === 'string' ? st : st.name;
+      var days = typeof st === 'string' ? 0 : Number(st.days);
       return {
-        name: n,
-        weight: from ? from.weight : 20,
+        name: name,
+        days: days > 0 ? Math.round(days) : (from ? from.days : 14),
         owner: '',
-        tasks: from ? from.tasks : ('First task\n* ' + n + ' complete')
+        tasks: from ? from.tasks : ('First task\n* ' + name + ' complete')
       };
     });
   }
@@ -55,7 +79,7 @@
       start: nextMonday(),
       horizon: 91, days: 91, gran: 'auto',
       goal: '', signoff: '',
-      inScope: [], outScope: [], worries: [], cadence: '',
+      inScope: [], outScope: [], worries: [], cadence: '', around: [],
       team: [{ name: '', initials: '', role: '' }],
       phases: presetPhases('strategic-initiative'),
       docs: ['plan', 'gantt', 'raci', 'charter', 'risks', 'status'],
@@ -124,6 +148,19 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
   }
 
+  /* Saved setups from before phase lengths were in days still hold weights.
+     Convert them once rather than making every reader handle both. */
+  function migratePhases() {
+    var ph = state.phases || [];
+    if (!ph.length || ph.every(function (p) { return Number(p.days) > 0; })) return;
+    var total = horizonDays();
+    var sumW = ph.reduce(function (n, p) { return n + (Number(p.weight) || 1); }, 0);
+    ph.forEach(function (p) {
+      p.days = Math.max(1, Math.round((Number(p.weight) || 1) / sumW * total));
+      delete p.weight;
+    });
+  }
+
   /* ---------------- derived ---------------- */
   function horizonDays() {
     return state.horizon === 'custom'
@@ -151,15 +188,19 @@
       outScope: state.outScope || [],
       worries: state.worries || [],
       cadence: state.cadence || '',
+      around: state.around || [],
       startDate: state.start,
       horizonDays: horizonDays(),
       granularity: state.gran,
       /* did the user get to see and edit the phases? documents that use phases
          only opportunistically check this before reporting them */
       phasesInForm: !!needs().phases,
-      team: (state.team || []).filter(function (m) { return (m.name || m.initials || '').trim(); }),
+      team: (state.team || []).filter(function (m) { return (m.name || m.initials || '').trim(); })
+        .map(function (m) {
+          return { name: m.name, initials: m.initials, role: m.role, ask: m.ask || '' };
+        }),
       phases: (state.phases || []).map(function (p) {
-        return { name: p.name, weight: p.weight, owner: p.owner, tasks: parseTasks(p.tasks) };
+        return { name: p.name, days: phaseDays(p), owner: p.owner, tasks: parseTasks(p.tasks) };
       })
     };
   }
@@ -283,7 +324,8 @@
       return '<div class="team-row" data-i="' + i + '">' +
         '<input type="text" data-k="name" list="peopleList" placeholder="Name" value="' + R.esc(m.name || '') + '" autocomplete="off">' +
         '<input type="text" data-k="initials" placeholder="Init" maxlength="4" value="' + R.esc(m.initials || '') + '" autocomplete="off">' +
-        '<input type="text" data-k="role" placeholder="Role or team" value="' + R.esc(m.role || '') + '" autocomplete="off">' +
+        '<input type="text" data-k="role" placeholder="Team" value="' + R.esc(m.role || '') + '" autocomplete="off">' +
+        '<input type="text" data-k="ask" placeholder="What you need from them" value="' + R.esc(m.ask || '') + '" autocomplete="off">' +
         '<button type="button" class="btn-x" data-act="rm" title="Remove">&times;</button>' +
         '</div>';
     }).join('');
@@ -312,8 +354,9 @@
         '<div class="phase-top">' +
           '<label class="ff"><span>Phase name</span>' +
             '<input class="pname" type="text" data-k="name" placeholder="e.g. Scoping" value="' + R.esc(p.name || '') + '" autocomplete="off"></label>' +
-          '<label class="ff"><span>Weight</span>' +
-            '<input type="number" data-k="weight" min="1" max="100" step="1" value="' + (p.weight || 20) + '"></label>' +
+          '<label class="ff"><span>Length</span>' +
+            '<span class="days-in"><input type="number" data-k="days" min="1" max="730" step="1" value="' +
+              phaseDays(p) + '"><em>days</em></span></label>' +
           '<label class="ff"><span>Owner</span>' +
             '<input type="text" data-k="owner" list="ownerList" placeholder="Inherits" value="' + R.esc(p.owner || '') + '" autocomplete="off"></label>' +
           '<button type="button" class="btn-x" data-act="rm" title="Remove this phase">&times;</button>' +
@@ -347,10 +390,7 @@
   function updatePhaseFeet() {
     var c = cfg();
     var sched = P.buildSchedule(c);
-    var totalDays = horizonDays();
-    var totalW = c.phases.reduce(function (n, p) {
-      return n + (Number(p.weight) > 0 ? Number(p.weight) : 1);
-    }, 0) || 1;
+    var totalDays = totalPhaseDays();
     var scheduled = needs().schedule;
 
     var nodes = $('phaseList').querySelectorAll('.phase');
@@ -360,15 +400,14 @@
       var cEl = nodes[i].querySelector('.pf-count');
       if (!ph) { dEl.textContent = ''; cEl.textContent = ''; continue; }
 
-      var w = Number(state.phases[i] && state.phases[i].weight) || 1;
-      var pct = Math.round(w / totalW * 100);
       var days = P.diffDays(ph.start, ph.end) + 1;
+      var pct = Math.round(days / Math.max(1, totalDays) * 100);
 
-      /* say what the weight bought, in the units the user cares about */
+      /* days are what they typed; the proportion is the derived reading of it */
       dEl.textContent = scheduled
-        ? 'Weight ' + w + ' of ' + totalW + ' = ' + pct + '% of the horizon, so ' +
-          days + ' days: ' + P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end)
-        : 'Weight ' + w + ' of ' + totalW + ' = ' + pct + '% of the horizon';
+        ? P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end) +
+          '  ·  ' + pct + '% of the project'
+        : pct + '% of the project';
 
       var ms = ph.tasks.filter(function (t) { return t.milestone; }).length;
       var tasks = ph.tasks.length - ms;
@@ -420,8 +459,14 @@
     var m = materialize(item);
     meta.textContent = slug(c.project) + '-project-kit/' + m.name;
 
-    if (item.sheet) body.innerHTML = R.previewSheet(item.sheet);
-    else body.innerHTML = '<div class="pv-doc">' + R.toHtmlBody(item.blocks) + '</div>';
+    body.classList.toggle('is-sheet', !!item.sheet);
+    if (item.sheet) {
+      body.innerHTML = R.previewSheet(item.sheet);
+    } else {
+      /* a page, so people can picture the document rather than read a wireframe */
+      body.innerHTML = '<div class="paper"><div class="pv-doc">' +
+        R.toHtmlBody(item.blocks) + '</div></div>';
+    }
     body.scrollTop = 0;
   }
 
@@ -435,12 +480,11 @@
     var taskCount = c.phases.reduce(function (n, p) {
       return n + p.tasks.filter(function (t) { return !t.milestone; }).length;
     }, 0);
-    var totalW = c.phases.reduce(function (n, p) {
-      return n + (Number(p.weight) > 0 ? Number(p.weight) : 1);
-    }, 0);
+    var sumDays = totalPhaseDays();
     $('weightTotal').textContent = c.phases.length
-      ? 'Weights total ' + totalW + ' across ' + c.phases.length + ' phases. ' +
-        'They do not have to add up to 100: what matters is each phase relative to the rest.'
+      ? c.phases.length + ' phases totalling ' + sumDays + ' days, ' +
+        'finishing ' + P.fmtLong(P.addDays(P.parseISO(state.start), sumDays - 1)) +
+        '. Change any length and the finish date moves with it.'
       : '';
 
     var warn = $('planWarn');
@@ -562,20 +606,26 @@
       state.sponsor = res.signoff.trim();
     }
     state.preset = res.preset;
-    state.phases = phasesFor(res.preset, res.phaseNames);
+    state.phases = phasesFor(res.preset, res.stages, res.horizon);
     state.inScope = res.inScope || [];
     state.outScope = res.outScope || [];
     state.worries = res.worries || [];
     state.cadence = res.cadence || '';
+    state.around = res.around || [];
     state.horizon = res.horizon;
     state.days = res.horizon;
     if (res.docs && res.docs.length) state.docs = res.docs.slice();
     /* names given during shaping win; otherwise seed with the owner so the RACI
        has at least one column to work with */
     if (res.team && res.team.length) {
-      state.team = res.team.map(function (n) {
+      state.team = res.team.map(function (m) {
+        var n = typeof m === 'string' ? m : m.name;
         var known = BY_NAME[n.toLowerCase()];
-        return { name: n, initials: initialsOf(n), role: (known && known.t) || '' };
+        return {
+          name: n, initials: initialsOf(n),
+          role: (known && known.t) || '',
+          ask: (typeof m === 'string' ? '' : m.ask) || ''
+        };
       });
     } else if (res.owner && !(state.team || []).some(function (m) { return (m.name || '').trim(); })) {
       state.team = [{ name: res.owner, initials: initialsOf(res.owner), role: '' }];
@@ -719,6 +769,7 @@
     fillSelects();
     fillPeopleList();
     load();
+    migratePhases();
     syncForm();
     renderTeam();
     renderPhases();
@@ -727,31 +778,44 @@
 
     ['project', 'dri', 'sponsor', 'start', 'gran', 'sheetfmt', 'docfmt', 'bundle', 'naming']
       .forEach(function (k) { bindField('f-' + k, k); });
-    bindField('f-horizon', 'horizon', function (v) { return v === 'custom' ? 'custom' : parseInt(v, 10); });
-    bindField('f-days', 'days', function (v) { return parseInt(v, 10) || 91; });
+    /* The horizon is now a way of restating the whole window: rescale the phase
+       lengths to fit it, rather than leaving two numbers that disagree. */
+    $('f-horizon').addEventListener('change', function () {
+      var v = this.value;
+      state.horizon = v === 'custom' ? 'custom' : parseInt(v, 10);
+      rescalePhases(horizonDays());
+      renderPhases();
+      refresh();
+    });
+    $('f-days').addEventListener('input', function () {
+      state.days = parseInt(this.value, 10) || 91;
+      rescalePhases(horizonDays());
+      renderPhases();
+      refresh();
+    });
 
     $('f-preset').addEventListener('change', function () {
       state.preset = this.value;
-      state.phases = presetPhases(state.preset);
+      state.phases = presetPhases(state.preset, horizonDays());
       syncForm();
       renderPhases();
       refresh();
     });
 
     $('resetPhases').addEventListener('click', function () {
-      state.phases = presetPhases(state.preset);
+      state.phases = presetPhases(state.preset, horizonDays());
       renderPhases();
       refresh();
     });
 
     $('addPhase').addEventListener('click', function () {
-      state.phases.push({ name: 'New phase', weight: 20, owner: '', tasks: 'Task\n* Milestone' });
+      state.phases.push({ name: 'New phase', days: 14, owner: '', tasks: 'Task\n* Milestone' });
       renderPhases();
       refresh();
     });
 
     $('addMember').addEventListener('click', function () {
-      state.team.push({ name: '', initials: '', role: '' });
+      state.team.push({ name: '', initials: '', role: '', ask: '' });
       renderTeam();
       refresh();
     });
@@ -797,7 +861,9 @@
       var k = e.target.getAttribute('data-k');
       if (!k) return;
       var i = +e.target.closest('.phase').getAttribute('data-i');
-      state.phases[i][k] = k === 'weight' ? (parseInt(e.target.value, 10) || 1) : e.target.value;
+      state.phases[i][k] = k === 'days'
+        ? Math.max(1, Math.min(730, parseInt(e.target.value, 10) || 1))
+        : e.target.value;
       if (k === 'tasks') autosize(e.target);
       refresh();
     });

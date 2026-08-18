@@ -44,9 +44,12 @@ stage ends in a gating call, and its status vocabulary uses the four gating outc
 (advance, deprioritize, hold, defer). Per-stage tasks are the outputs that guidance
 names: evidence review, BOTEC and expanded CEA, project scorecard, prolog, decision memo.
 
-All of it is editable before export: rename phases, change the weights that set how much
-of the horizon each phase takes, and edit tasks as plain text (one per line, `*` prefix
-makes a milestone).
+All of it is editable before export: rename phases, set each one's **length in days**, and
+edit tasks as plain text (one per line, `*` prefix makes a milestone). Phase lengths are the
+editable number because that is how people think about them; the share of the project each
+one takes is shown alongside as a derived figure rather than the thing you type. Presets
+weight their phases unevenly on purpose, since a deep dive really is longer than a
+screening, and that shape survives whatever window you pick.
 
 ## The form only asks what your selection needs
 
@@ -100,17 +103,27 @@ proposes a shape and asks whether it is right:
 > 5 stages of about 18 days each, each ending in a milestone, so something lands roughly
 > every 3 weeks.
 
-Each stage is listed with the dates it would actually get, computed by the same scheduler
-that writes the spreadsheet. Accept it, or rewrite the stages and watch the timeline
-redistribute. Later stages ask what is in and deliberately out of scope, who is involved,
-what worries you most, and how often you will update people. Only the stages your
-selection needs are asked, so someone who wanted a decision log is never asked about
-scope.
+It arrives as an editable table of stage and length, with the dates each one lands on
+computed by the same scheduler that writes the spreadsheet, so the proposal cannot drift
+from the output. Change a length and everything after it shifts.
+
+Later stages ask what to plan around (holidays, fieldwork, someone on leave), who is
+involved **and what you need from each of them**, what is in and deliberately out of scope,
+what worries you most, and how often you will update people. Every stage says which
+document it feeds and what it makes explicit there, and the ones where a placeholder is
+genuinely fine carry a **Skip** button. Only the stages your selection needs are asked, so
+someone who wanted a decision log is never asked about scope.
+
+Dates to plan around are recorded on the plan and in the charter, and the charter says
+plainly that the dates were not shifted to avoid them. Automatically routing a timeline
+around holidays needs structured dates and is a bigger feature; pretending to do it would
+be worse than noting it.
 
 All of it lands in the documents: scope lists become the charter's in and out of scope
 sections, worries become the first rows of the risk register above the generic ones, names
-become RACI columns with initials and teams filled in, the cadence sets the reporting
-period, and the stage names become the phases of the plan and Gantt.
+become RACI columns while what you need from each person becomes their decision rights in
+the charter and what they care about in the stakeholder map, the cadence sets the reporting
+period, and the stages become the phases of the plan and Gantt with the lengths you set.
 
 Deliberately not an LLM. This page is static and public, so there is nowhere to keep an
 API key, and a scripted flow is better here anyway: it works offline, answers instantly,

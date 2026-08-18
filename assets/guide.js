@@ -704,6 +704,36 @@
       return;
     }
 
+    var tAdd = e.target.closest('[data-tadd]');
+    if (tAdd) {
+      var stA = activeStages()[shapeIdx];
+      var rows = readTable();
+      rows.push(stA.textCol === 1 ? { name: '', ask: '' } : { name: '', days: 7 });
+      stA.commit(rows);
+      render();
+      return;
+    }
+
+    var tRm = e.target.closest('[data-trm]');
+    if (tRm) {
+      var stR = activeStages()[shapeIdx];
+      var rws = readTable();
+      rws.splice(+tRm.getAttribute('data-trm'), 1);
+      stR.commit(rws);
+      render();
+      return;
+    }
+
+    /* skip leaves the placeholders in place: nothing is committed */
+    if (e.target.closest('[data-stageskip]')) {
+      shape._editing = null;
+      var stages2 = activeStages();
+      if (shapeIdx >= stages2.length - 1) { finish(); return; }
+      shapeIdx++;
+      think(STEP_MSGS, THINK.step, render);
+      return;
+    }
+
     var sGo = e.target.closest('[data-stagego]');
     if (sGo) { commitStage(); shape._editing = null; shapeIdx = +sGo.getAttribute('data-stagego'); render(); return; }
 
@@ -755,8 +785,9 @@
         horizon: horizonFor(),
         docs: chosen,
         /* everything settled during the shaping conversation */
-        phaseNames: shape.phaseNames || null,
-        team: shape.team || null,
+        stages: (shape.stages && shape.stages.length) ? shape.stages : null,
+        team: (shape.team || []).filter(function (m) { return m.name; }),
+        around: shape.around || null,
         inScope: shape.inScope || null,
         outScope: shape.outScope || null,
         worries: shape.worries || null,
@@ -772,93 +803,112 @@
        lines     one item per line
        pair      two line lists side by side
        single    pick one */
-  function proposedPhaseNames() {
-    if (shape.phaseNames && shape.phaseNames.length) return shape.phaseNames.slice();
-    var preset = SIK.templates.PRESETS[presetFor()];
-    return preset.phases.map(function (p) { return p.name; });
+  function splitLines(t) {
+    return String(t || '').split('\n')
+      .map(function (l) { return l.trim(); }).filter(Boolean);
   }
 
-  /* run the real scheduler, so the dates we propose are the dates they will get */
-  function proposalSchedule(names) {
+  /* A stage is {name, days}. Lengths come from the preset's own weighting, which
+     is deliberately uneven: a deep dive really is longer than a screening. */
+  function proposedStages() {
+    if (shape.stages && shape.stages.length) {
+      return shape.stages.map(function (st) { return { name: st.name, days: st.days }; });
+    }
+    var preset = SIK.templates.PRESETS[presetFor()];
+    var total = horizonFor();
+    var sumW = preset.phases.reduce(function (n, ph) { return n + (ph.weight || 1); }, 0);
+    return preset.phases.map(function (ph) {
+      return { name: ph.name, days: Math.max(1, Math.round((ph.weight || 1) / sumW * total)) };
+    });
+  }
+
+  function stagesSchedule(stages) {
     return P.buildSchedule({
       startDate: startDate(),
-      horizonDays: horizonFor(),
-      phases: names.map(function (n) {
-        return { name: n, weight: 1, tasks: [{ name: 'placeholder' }] };
+      horizonDays: stages.reduce(function (n, s) { return n + s.days; }, 0),
+      phases: stages.map(function (s) {
+        return { name: s.name, days: s.days, tasks: [{ name: 'placeholder' }] };
       })
     });
   }
 
-  function everyPhrase(days) {
-    if (days <= 10) return 'about every ' + days + ' days';
-    var wk = Math.round(days / 7);
-    return 'roughly every ' + wk + (wk === 1 ? ' week' : ' weeks');
-  }
-
-  function splitLines(t) {
-    return String(t || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  function daysPhrase(d) {
+    if (d < 7) return d + (d === 1 ? ' day' : ' days');
+    var wk = Math.round(d / 7);
+    return wk + (wk === 1 ? ' week' : ' weeks');
   }
 
   var STAGES = [
     {
-      id: 'phases', needs: ['plan', 'gantt'], type: 'proposal',
+      id: 'stages', needs: ['plan', 'gantt'], type: 'table',
       title: 'Does this shape look right?',
+      why: 'This becomes the phases of your project plan and the bars on your Gantt.',
       propose: function () {
-        var names = proposedPhaseNames();
-        var sched = proposalSchedule(names);
-        var days = horizonFor();
-        var avg = Math.max(1, Math.round(days / names.length));
-        var lead = 'You said ' + horizonLabel() +
-          (kindLabel() ? ', ' + kindLabel() : '') + '. Over those ' + days +
-          ' days I propose ' + names.length + ' stages of about ' + avg +
-          ' days each, each ending in a milestone, so something lands ' +
-          everyPhrase(avg) + '.';
-        var rows = sched.phases.map(function (ph) {
-          return '<li><b>' + R.esc(ph.name) + '</b><span>' +
-            P.fmtShort(ph.start) + ' to ' + P.fmtShort(ph.end) + '</span></li>';
-        }).join('');
-        return { lead: lead, html: '<ol class="prop-list">' + rows + '</ol>' };
+        var st = proposedStages();
+        var sched = stagesSchedule(st);
+        var total = st.reduce(function (n, x) { return n + x.days; }, 0);
+        var lens = st.map(function (x) { return x.days; });
+        var even = Math.min.apply(null, lens) === Math.max.apply(null, lens);
+        return {
+          lead: 'You said ' + horizonLabel() + (kindLabel() ? ', ' + kindLabel() : '') +
+            '. Here is a ' + total + ' day shape in ' + st.length + ' stages' +
+            (even ? '' : ', longer where the work usually is') +
+            '. Change any length and everything after it shifts.',
+          sched: sched
+        };
       },
-      editLabel: 'I would change the stages',
-      editHelp: 'One stage per line, in order. Add, remove, or rename freely: the timeline redistributes across however many you leave.',
-      editValue: function () { return proposedPhaseNames().join('\n'); },
-      commit: function (text) {
-        var names = splitLines(text);
-        if (names.length) shape.phaseNames = names;
-      }
+      cols: ['Stage', 'Length'],
+      rows: function () { return proposedStages(); },
+      commit: function (rows) { if (rows.length) shape.stages = rows; }
     },
     {
-      id: 'team', needs: ['raci', 'plan'], type: 'lines',
-      title: 'Who is involved?',
-      help: 'One name per line. These become the columns of your RACI and the owner dropdown in every spreadsheet. Initials are worked out for you.',
-      placeholder: 'Grace Hultquist\nSamson Wakoli',
-      value: function () {
-        if (shape.team) return shape.team.join('\n');
-        return shape.owner || '';
-      },
-      commit: function (text) { shape.team = splitLines(text); }
+      id: 'around', needs: ['plan', 'gantt'], type: 'lines', skippable: true,
+      title: 'Anything to plan around?',
+      why: 'Recorded on the plan and in the charter so the dates get read with it in mind.',
+      help: 'Holidays, fieldwork, someone on leave, a board meeting you have to hit. ' +
+        'One per line. Dates are not shifted automatically, so treat these as the notes ' +
+        'you check the plan against.',
+      placeholder: 'Team offsite 8 to 12 September\nCountry director on leave in October\nBoard papers due 20 November',
+      value: function () { return (shape.around || []).join('\n'); },
+      commit: function (text) { shape.around = splitLines(text); }
     },
     {
-      id: 'scope', needs: ['charter'], type: 'pair',
+      id: 'team', needs: ['raci', 'plan'], type: 'table', skippable: true,
+      title: 'Who is involved, and what do you need from them?',
+      why: 'Names become the columns of your RACI. What you need from them becomes their ' +
+        'decision rights in the charter and what they care about in the stakeholder map.',
+      cols: ['Name', 'What you need from them'],
+      textCol: 1,
+      rows: function () {
+        if (shape.team && shape.team.length) return shape.team.slice();
+        return [{ name: shape.owner || '', ask: '' }, { name: '', ask: '' }, { name: '', ask: '' }];
+      },
+      commit: function (rows) { shape.team = rows; }
+    },
+    {
+      id: 'scope', needs: ['charter'], type: 'pair', skippable: true,
       title: 'What is in, and what is deliberately out?',
-      help: 'The second box matters more than people expect: writing down what you are not doing is what stops the scope argument three months in. One item per line, or skip it.',
+      why: 'Fills the In scope and Explicitly out of scope sections of your charter, so the ' +
+        'boundary is written down once instead of argued about later.',
+      help: 'The second box is the one that earns its keep. One item per line.',
       a: { label: 'In scope', placeholder: 'Review the existing evidence\nInterview 8 to 10 people\nWrite a recommendation' },
       b: { label: 'Explicitly out of scope', placeholder: 'Running a pilot\nAnything past the go/no-go decision' },
       value: function () { return [(shape.inScope || []).join('\n'), (shape.outScope || []).join('\n')]; },
       commit: function (a, b) { shape.inScope = splitLines(a); shape.outScope = splitLines(b); }
     },
     {
-      id: 'worries', needs: ['risks'], type: 'lines',
+      id: 'worries', needs: ['risks'], type: 'lines', skippable: true,
       title: 'What worries you most?',
-      help: 'One per line, in plain language. These go into your risk register above the generic ones, so it opens with the things you actually lose sleep over.',
+      why: 'These open your risk register, above the generic risks that come with the template.',
+      help: 'One per line, in plain language.',
       placeholder: 'The partner may not have capacity in the second half\nApproval slips past October',
       value: function () { return (shape.worries || []).join('\n'); },
       commit: function (text) { shape.worries = splitLines(text); }
     },
     {
-      id: 'cadence', needs: ['status', 'onepager'], type: 'single',
+      id: 'cadence', needs: ['status', 'onepager'], type: 'single', skippable: true,
       title: 'How often will you update people?',
-      help: 'Sets the reporting period on your update template.',
+      why: 'Sets the reporting period on your update template and notes it in the charter.',
       options: ['Weekly', 'Fortnightly', 'Monthly', 'At milestones only'],
       value: function () { return shape.cadence || ''; },
       commit: function (v) { shape.cadence = v; }
@@ -876,19 +926,45 @@
     var st = stages[shapeIdx];
     if (!st) return '';
     var last = shapeIdx === stages.length - 1;
-    var editing = shape._editing === st.id;
     var h = '<div class="gq gq-active gq-stage ac">' +
       '<p class="ac-q">' + R.esc(st.title) + '</p>' +
+      (st.why ? '<p class="ac-why"><b>Why this helps:</b> ' + R.esc(st.why) + '</p>' : '') +
       (st.help ? '<p class="ac-help">' + R.esc(st.help) + '</p>' : '');
 
-    if (st.type === 'proposal') {
-      var pr = st.propose();
-      h += '<p class="prop-lead">' + R.esc(pr.lead) + '</p>' + pr.html;
-      if (editing) {
-        h += '<label class="ff ff-tasks"><span>' + R.esc(st.editHelp) + '</span>' +
-          '<textarea id="stageA" rows="7">' + R.esc(st.editValue()) + '</textarea></label>';
-      } else {
-        h += '<p class="prop-ask">How does that sound?</p>';
+    if (st.type === 'table') {
+      var rows = st.rows();
+      if (st.propose) {
+        var pr = st.propose();
+        h += '<p class="prop-lead">' + R.esc(pr.lead) + '</p>';
+      }
+      var sched = st.id === 'stages' ? stagesSchedule(rows) : null;
+      h += '<div class="tbl">' +
+        '<div class="tbl-head"><span>' + R.esc(st.cols[0]) + '</span><span>' +
+          R.esc(st.cols[1]) + '</span>' + (sched ? '<span>Lands</span>' : '') + '<span></span></div>' +
+        rows.map(function (r, i) {
+          var second = st.textCol === 1
+            ? '<input type="text" data-tk="ask" data-ti="' + i + '" value="' + R.esc(r.ask || '') +
+                '" placeholder="e.g. signs off the budget">'
+            : '<span class="days-in"><input type="number" data-tk="days" data-ti="' + i +
+                '" min="1" max="730" value="' + (r.days || 1) + '"><em>days</em></span>';
+          var lands = sched && sched.phases[i]
+            ? '<span class="tbl-lands">' + P.fmtShort(sched.phases[i].start) + ' to ' +
+                P.fmtShort(sched.phases[i].end) + '</span>'
+            : (sched ? '<span class="tbl-lands"></span>' : '');
+          return '<div class="tbl-row">' +
+            '<input type="text" data-tk="name" data-ti="' + i + '" value="' +
+              R.esc(r.name || '') + '" placeholder="' + R.esc(st.cols[0]) + '">' +
+            second + lands +
+            '<button type="button" class="btn-x" data-trm="' + i + '" title="Remove">&times;</button>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      '<button type="button" class="btn-ghost" data-tadd="1">+ Add ' +
+        R.esc(st.cols[0].toLowerCase()) + '</button>';
+      if (sched) {
+        var total = rows.reduce(function (n, r) { return n + (Number(r.days) || 0); }, 0);
+        h += '<p class="tbl-total">' + total + ' days in total, finishing ' +
+          P.fmtLong(sched.end) + '.</p>';
       }
     } else if (st.type === 'lines') {
       h += '<textarea id="stageA" rows="5" placeholder="' + R.esc(st.placeholder || '') + '">' +
@@ -906,28 +982,48 @@
       h += optionRows(st.options, false, cur, 'data-stagepick');
     }
 
-    var nextLabel = last ? buildLabel() : 'Continue';
     h += '<div class="ac-foot">' +
       '<button type="button" class="btn-ghost btn-ghost-inline" data-stageback="1">Back</button>' +
       '<span class="stage-actions">' +
-        (st.type === 'proposal' && !editing
-          ? '<button type="button" class="btn-ghost btn-ghost-inline" data-stageedit="' + st.id + '">' +
-              R.esc(st.editLabel) + '</button>'
+        (st.skippable
+          ? '<button type="button" class="btn-link" data-stageskip="1">Skip, use placeholders</button>'
           : '') +
         '<button type="button" class="btn-primary" id="stageNext">' +
-          (st.type === 'proposal' && !editing && !last ? 'Sounds right' : nextLabel) +
+          (last ? buildLabel() : 'Continue') +
         '</button>' +
       '</span>' +
     '</div>';
     return h + '</div>';
   }
 
+  /* table edits update the working copy in place, then re-render so the landing
+     dates and the total move with whatever was just typed */
+  function readTable() {
+    var st = activeStages()[shapeIdx];
+    if (!st || st.type !== 'table') return [];
+    var host = $('guideFlow');
+    var rows = [];
+    host.querySelectorAll('.tbl-row').forEach(function (row, i) {
+      var name = row.querySelector('[data-tk="name"]');
+      var days = row.querySelector('[data-tk="days"]');
+      var ask = row.querySelector('[data-tk="ask"]');
+      rows.push({
+        name: name ? name.value.trim() : '',
+        days: days ? Math.max(1, Math.min(730, parseInt(days.value, 10) || 1)) : undefined,
+        ask: ask ? ask.value.trim() : undefined
+      });
+    });
+    return rows.filter(function (r) { return r.name || r.ask; });
+  }
+
   function commitStage() {
     var st = activeStages()[shapeIdx];
     if (!st) return;
-    if (st.type === 'pair') {
+    if (st.type === 'table') {
+      st.commit(readTable());
+    } else if (st.type === 'pair') {
       st.commit($('stageA') && $('stageA').value, $('stageB') && $('stageB').value);
-    } else if (st.type === 'lines' || (st.type === 'proposal' && shape._editing === st.id)) {
+    } else if (st.type === 'lines') {
       st.commit($('stageA') && $('stageA').value);
     }
   }
@@ -956,8 +1052,16 @@
     for (var i = 0; i < shapeIdx && i < stages.length; i++) {
       var st = stages[i];
       var summary = '';
-      if (st.id === 'phases') summary = proposedPhaseNames().join(' → ');
-      else if (st.id === 'team') summary = (shape.team || []).join(', ') || 'Nobody named yet';
+      if (st.id === 'stages') {
+        summary = proposedStages().map(function (x) {
+          return x.name + ' (' + x.days + 'd)';
+        }).join(' → ');
+      } else if (st.id === 'around') summary = (shape.around || []).join('; ') || 'Skipped';
+      else if (st.id === 'team') {
+        summary = (shape.team || []).filter(function (m) { return m.name; })
+          .map(function (m) { return m.ask ? m.name + ' — ' + m.ask : m.name; })
+          .join('; ') || 'Skipped';
+      }
       else if (st.id === 'scope') {
         summary = ((shape.inScope || []).length ? (shape.inScope || []).length + ' in scope' : 'nothing in scope yet') +
           ', ' + ((shape.outScope || []).length ? (shape.outScope || []).length + ' explicitly out' : 'nothing ruled out');
@@ -979,6 +1083,13 @@
     host.addEventListener('change', onDocToggle);
     host.addEventListener('input', function (e) {
       if (e.target.id === 'gqText') e.target.classList.remove('needs');
+    });
+    /* a length change moves every later date, so redraw the table on commit */
+    host.addEventListener('change', function (e) {
+      if (e.target.getAttribute && e.target.getAttribute('data-tk') === 'days') {
+        var st = activeStages()[shapeIdx];
+        if (st) { st.commit(readTable()); render(); }
+      }
     });
     /* Enter advances a text question, Shift+Enter makes a new line */
     host.addEventListener('keydown', function (e) {

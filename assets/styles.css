@@ -195,7 +195,7 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 /* ---------- team rows ---------- */
 .team { display: flex; flex-direction: column; gap: 8px; }
 .team-row {
-  display: grid; grid-template-columns: 1.4fr .55fr 1.3fr auto; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: 1.2fr .45fr .9fr 1.3fr auto; gap: 7px; align-items: center;
 }
 .team-row input { padding: 6px 8px; font-size: 13px; }
 
@@ -639,3 +639,103 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 .reg-row { display: flex; gap: 8px; margin-top: 9px; }
 .reg-row input { flex: 1; padding: 6px 9px; font-size: 13px; }
 .reg-row .btn-ghost-inline { margin-top: 0; white-space: nowrap; }
+
+/* ---------- stage tables (stage + length, name + what you need) ---------- */
+.tbl { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; }
+.tbl-head, .tbl-row {
+  display: grid; grid-template-columns: 1fr 148px auto 28px; gap: 8px; align-items: center;
+}
+.tbl-row:has(input[data-tk="ask"]) { grid-template-columns: 1fr 1.3fr 28px; }
+.tbl-head:has(~ .tbl-row input[data-tk="ask"]) { grid-template-columns: 1fr 1.3fr 28px; }
+.tbl-head span {
+  font-size: 10.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.tbl-row input { padding: 6px 8px; font-size: 13px; }
+.tbl-lands {
+  font-size: 11.5px; color: var(--text-muted); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tbl-total {
+  font-size: 12.5px; color: #414b57; margin: 10px 0 0; font-variant-numeric: tabular-nums;
+}
+.days-in { position: relative; display: block; }
+.days-in input { padding-right: 42px !important; }
+.days-in em {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  font-style: normal; font-size: 11px; color: var(--text-faint); pointer-events: none;
+}
+
+.ac-why {
+  font-size: 12.5px; color: #414b57; margin: 6px 0 0;
+  background: var(--accent-weak); border-radius: var(--radius-sm); padding: 7px 10px;
+}
+.ac-why b { color: var(--accent-dark); font-weight: 650; }
+
+/* ---------- preview: make it look like the file it will become ---------- */
+.pv-body.is-sheet { background: var(--surface-2); padding: 12px; }
+
+.sheet {
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 3px; box-shadow: 0 1px 3px rgba(16,24,40,.08);
+  display: inline-block; min-width: 100%;
+}
+.sheet-cols {
+  display: flex; background: #f5f6f8; border-bottom: 1px solid var(--border-strong);
+  position: sticky; top: 0; z-index: 3;
+}
+.sheet-col, .sheet-gutter {
+  font-family: var(--mono); font-size: 9.5px; color: var(--text-faint);
+  text-align: center; padding: 3px 0; border-right: 1px solid var(--border);
+  flex: 1 0 auto; min-width: 0;
+}
+.sheet-gutter { flex: 0 0 26px; }
+.sheet-rownum {
+  font-family: var(--mono); font-size: 9.5px; color: var(--text-faint);
+  text-align: center; background: #f5f6f8;
+  border: 1px solid var(--border) !important; border-right-color: var(--border-strong) !important;
+  width: 26px; min-width: 26px; padding: 3px 0 !important;
+  position: sticky; left: 0; z-index: 2;
+}
+.sheet-tab {
+  display: inline-block; margin: 0; padding: 4px 14px;
+  font-size: 11px; font-weight: 600; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border-strong); border-top: 0;
+  border-radius: 0 0 4px 4px; position: sticky; left: 0;
+}
+
+/* the sticky task-name column has to sit above the row numbers, not under them */
+table.pv tr > td:nth-child(2) { position: sticky; left: 26px; z-index: 1; }
+table.pv tr > td:first-child { position: static; min-width: 26px; }
+
+/* narrative documents get a page */
+.paper {
+  background: #fff; border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 6px 20px rgba(16,24,40,.06);
+  border-radius: 2px; padding: 34px 38px; margin: 4px auto 8px;
+  max-width: 640px;
+}
+.paper .pv-doc { max-width: none; font-size: 13.5px; line-height: 1.62; }
+.paper .pv-doc h1 {
+  font-size: 21px; margin: 0 0 10px; letter-spacing: -.02em;
+  padding-bottom: 10px; border-bottom: 2px solid var(--text);
+}
+.paper .pv-doc h2 {
+  font-size: 14.5px; margin: 24px 0 7px; color: var(--text);
+  text-transform: none; letter-spacing: -.005em;
+}
+.paper .pv-doc h3 { font-size: 13px; margin: 16px 0 5px; }
+.paper .pv-doc .metablock {
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  padding: 10px 12px; font-size: 12px; line-height: 1.7;
+}
+.paper .pv-doc table { font-size: 12px; }
+.paper .pv-doc th { background: var(--band); }
+.paper .pv-doc blockquote { font-size: 12.5px; }
+.paper .pv-doc ul, .paper .pv-doc ol { padding-left: 22px; }
+
+@media (max-width: 620px) {
+  .tbl-head, .tbl-row { grid-template-columns: 1fr 96px 24px; }
+  .tbl-lands { display: none; }
+  .paper { padding: 20px 18px; }
+}

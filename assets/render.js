@@ -110,10 +110,23 @@
       for (var c = c1 + 1; c <= c2; c++) covered[r1 + ',' + c] = true;
     });
 
-    var html = '<table class="pv">';
+    /* Column letters and row numbers, so a spreadsheet preview reads as a
+       spreadsheet rather than as a bare HTML table. */
+    var widest = 1;
+    rows.forEach(function (row) {
+      if (row && row.cells) widest = Math.max(widest, Math.min(row.cells.length, MAX_COLS));
+    });
+
+    var html = '<div class="sheet">';
+    html += '<div class="sheet-cols"><span class="sheet-gutter"></span>';
+    for (var ci0 = 1; ci0 <= widest; ci0++) {
+      html += '<span class="sheet-col">' + SIK.sheet.colName(ci0) + '</span>';
+    }
+    html += '</div>';
+    html += '<table class="pv">';
     rows.forEach(function (row, ri) {
       var r = ri + 1;
-      html += '<tr>';
+      html += '<tr><td class="sheet-rownum">' + r + '</td>';
       var cells = (row && row.cells) || [];
       var n = Math.min(Math.max(cells.length, 1), MAX_COLS);
       for (var ci = 0; ci < n; ci++) {
@@ -130,8 +143,10 @@
       html += '</tr>';
     });
     html += '</table>';
+    html += '<div class="sheet-tab">' + esc(sheet.name || 'Sheet1') + '</div>';
+    html += '</div>';
     var truncated = (sheet.rows || []).length > MAX_ROWS;
-    if (truncated) html += '<p class="pv-note">Preview shows the first ' + MAX_ROWS +
+    if (truncated) html += '<p class="pv-note">Showing the first ' + MAX_ROWS +
       ' rows of ' + sheet.rows.length + '. The export has all of them.</p>';
     return html;
   }

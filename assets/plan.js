@@ -33,16 +33,29 @@
   function buildSchedule(cfg) {
     var start = parseISO(cfg.startDate);
     var total = Math.max(1, cfg.horizonDays | 0);
-    var end = addDays(start, total - 1);
     var phases = (cfg.phases || []).filter(function (p) { return p && (p.name || '').trim(); });
-    if (!phases.length) return { start: start, end: end, phases: [] };
+    if (!phases.length) return { start: start, end: addDays(start, total - 1), phases: [] };
 
-    var totalW = phases.reduce(function (n, p) { return n + (Number(p.weight) > 0 ? Number(p.weight) : 1); }, 0);
+    /* Phase lengths are given in days, which is how people actually think about
+       them. When every phase has one, the days win and the project window is
+       simply their sum. Proportional weights are still honoured for older saved
+       setups and for presets that have not been converted. */
+    var haveDays = phases.every(function (p) { return Number(p.days) > 0; });
+    if (haveDays) {
+      total = phases.reduce(function (n, p) { return n + Math.round(Number(p.days)); }, 0);
+    }
+    var end = addDays(start, total - 1);
+
+    var weightOf = function (p) {
+      if (haveDays) return Math.round(Number(p.days));
+      return Number(p.weight) > 0 ? Number(p.weight) : 1;
+    };
+    var totalW = phases.reduce(function (n, p) { return n + weightOf(p); }, 0);
 
     /* cumulative day boundaries so phase spans sum exactly to the horizon */
     var acc = 0, bounds = [0];
     phases.forEach(function (p) {
-      acc += (Number(p.weight) > 0 ? Number(p.weight) : 1) / totalW;
+      acc += weightOf(p) / totalW;
       bounds.push(Math.min(total, Math.round(acc * total)));
     });
     for (var i = 1; i < bounds.length; i++) {

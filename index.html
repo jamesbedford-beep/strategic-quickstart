@@ -8,7 +8,7 @@
 <!-- ?v= must be bumped whenever an asset changes. Without it a browser can pair
      new HTML with a cached older script, which throws and leaves the page half
      initialized. Same number on every asset so they can never mismatch. -->
-<link rel="stylesheet" href="assets/styles.css?v=9">
+<link rel="stylesheet" href="assets/styles.css?v=10">
 </head>
 <body>
 
@@ -181,17 +181,18 @@
 
       <div class="explain">
         <p>
-          A <b>phase</b> is a slice of your timeline. Its <b>weight</b> decides how big that slice is:
-          a phase weighted 20 out of a total of 100 gets a fifth of the horizon. Tasks inside a phase
-          are then laid end to end across its slice, so each one gets a start and a due date.
+          A <b>phase</b> is a slice of your timeline. Give each one a <b>length in days</b>
+          and they run back to back from your start date, so the project finishes when the
+          last one does. Tasks inside a phase are spread across its slice, each getting a
+          start and a due date.
         </p>
         <ul>
           <li><b>One task per line.</b> Press Enter for the next one.</li>
           <li>Start a line with <code>*</code> for a <b>milestone</b>: no duration, pinned to the end of
             its phase, and marked <span class="ms-chip">&#9670;</span> in the plan and Gantt.</li>
           <li>Leave <b>Owner</b> blank and the phase inherits the project owner.</li>
-          <li>The grey line under each phase shows the dates your weight produced. Nothing is locked in:
-            edit any of it, or fix the dates in the spreadsheet afterwards.</li>
+          <li>The grey line under each phase shows the dates it lands on and what share of the
+            project it takes. Change a length and everything after it shifts.</li>
         </ul>
       </div>
 
@@ -255,16 +256,16 @@
 
 <datalist id="peopleList"></datalist>
 
-<script src="assets/zip.js?v=9"></script>
-<script src="assets/sheet.js?v=9"></script>
-<script src="assets/plan.js?v=9"></script>
-<script src="assets/templates.js?v=9"></script>
-<script src="assets/people.js?v=9"></script>
-<script src="assets/changelog.js?v=9"></script>
-<script src="assets/usage-config.js?v=9"></script>
-<script src="assets/render.js?v=9"></script>
-<script src="assets/build.js?v=9"></script>
-<script src="assets/app.js?v=9"></script>
-<script src="assets/guide.js?v=9"></script>
+<script src="assets/zip.js?v=10"></script>
+<script src="assets/sheet.js?v=10"></script>
+<script src="assets/plan.js?v=10"></script>
+<script src="assets/templates.js?v=10"></script>
+<script src="assets/people.js?v=10"></script>
+<script src="assets/changelog.js?v=10"></script>
+<script src="assets/usage-config.js?v=10"></script>
+<script src="assets/render.js?v=10"></script>
+<script src="assets/build.js?v=10"></script>
+<script src="assets/app.js?v=10"></script>
+<script src="assets/guide.js?v=10"></script>
 </body>
 </html>

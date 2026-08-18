@@ -42,6 +42,9 @@
     var rows = [];
     rows.push(row([C(cfg.project + ' project plan', 'title')], 26));
     rows.push(row([C(metaLine(cfg, sched), 'muted')], 16));
+    if ((cfg.around || []).length) {
+      rows.push(row([C('Planning around: ' + cfg.around.join('; '), 'muted')], 16));
+    }
     rows.push(row([]));
     rows.push(row(head.map(function (h) { return C(h, 'head'); }), 30));
 
@@ -324,7 +327,7 @@
     (cfg.team || []).forEach(function (m) {
       var n = (m.name || '').trim();
       if (!n || n === cfg.dri || n === cfg.sponsor) return;
-      seed.push([n, '', m.role || 'Core team', '', 'Medium', 'High']);
+      seed.push([n, '', m.role || 'Core team', m.ask || '', 'Medium', 'High']);
     });
     /* placeholders, clearly bracketed so nobody mistakes them for real entries */
     ['[Budget approver]', '[Legal or compliance reviewer]', '[Implementing partner lead]',
@@ -415,14 +418,30 @@
     return out;
   }
 
+  function askFor(cfg, name) {
+    var m = (cfg.team || []).filter(function (x) { return (x.name || '').trim() === name; })[0];
+    return (m && m.ask) || '';
+  }
+
   function teamRows(cfg) {
     var out = [];
-    if (cfg.dri) out.push([cfg.dri, 'Owner', 'Accountable for delivery and for the plan being true']);
-    if (cfg.sponsor) out.push([cfg.sponsor, 'Sponsor', 'Approves scope, budget, and the go / no go']);
+    if (cfg.dri) {
+      /* the owner's own "what you need from them", if they gave one, rather than
+         only the boilerplate */
+      var ownerAsk = askFor(cfg, cfg.dri);
+      out.push([cfg.dri, 'Owner',
+        'Accountable for delivery and for the plan being true' +
+        (ownerAsk ? '. Also: ' + ownerAsk : '')]);
+    }
+    if (cfg.sponsor) {
+      var spAsk = askFor(cfg, cfg.sponsor);
+      out.push([cfg.sponsor, 'Sponsor',
+        'Approves scope, budget, and the go / no go' + (spAsk ? '. Also: ' + spAsk : '')]);
+    }
     (cfg.team || []).forEach(function (m) {
       var n = (m.name || '').trim();
       if (!n || n === cfg.dri || n === cfg.sponsor) return;
-      out.push([n, m.role || '[role]', '']);
+      out.push([n, m.role || '[role]', m.ask || '']);
     });
     if (!out.length) out.push(['[name]', '[role]', '']);
     return out;
@@ -479,6 +498,12 @@
       { h2: 'Team and decision rights' },
       { table: { head: ['Name', 'Role', 'Decision rights'], rows: teamRows(cfg) } },
       { p: 'Anything not listed above is the owner\'s call. If that is wrong, say so now rather than at the first disagreement. Full detail sits in the RACI matrix.' },
+
+      (cfg.around || []).length ? { h2: 'Dates to plan around' } : null,
+      (cfg.around || []).length ? { ul: cfg.around } : null,
+      (cfg.around || []).length
+        ? { p: 'The dates below were not shifted to avoid these. Check the plan against them.' }
+        : null,
 
       { h2: 'Milestones' },
       { table: { head: ['Milestone', 'Target date', 'Owner'], rows: milestoneRows(sched) } },
